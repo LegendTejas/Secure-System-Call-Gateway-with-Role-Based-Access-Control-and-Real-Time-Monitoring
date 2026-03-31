@@ -1,237 +1,133 @@
 """
-syscall/syscall_wrapper.py
-Vanshika — Secure System Call Wrapper Layer.
-
-This is the CORE of Vanshika's work.
-Every file/command operation passes through here AFTER RBAC approval.
-
-Flow:
-    Request → RBAC (Tejas) → syscall_wrapper (Vanshika) → OS
-                                       ↓
-                               logger + threat_engine (Vanshika)
+syscall_layer/file_operations.py
+Vanshika — Secure file operation wrappers: read, write, delete, dir_list.
+All functions return { success, result/content, error } dicts.
 """
 
 import os
-import re
-import subprocess
+from syscall_layer.validation import validate_file_path, validate_write_data
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-
-# The only directory users are allowed to work inside
-SAFE_BASE_DIR = os.path.abspath("user_sandbox")
-
-# Dangerous path patterns that must always be blocked
-BLOCKED_PATH_PATTERNS = [
-    r"\.\.",            # path traversal: ../../etc/passwd
-    r"^/etc",           # system config
-    r"^/root",          # root home
-    r"^/sys",           # kernel sys
-    r"^/proc",          # process info
-    r"^/bin",           # system binaries
-    r"^/usr",           # system programs
-    r"^/boot",          # bootloader
-    r"^/dev",           # device files
-    r"^/var",           # system logs/data
-]
-
-# Commands that are allowed to execute
-ALLOWED_COMMANDS = {"ls", "pwd", "whoami", "echo", "cat", "date", "id"}
-
-# Commands that are always blocked no matter what
-BLOCKED_COMMANDS = {
-    "rm", "rmdir", "dd", "mkfs", "shutdown", "reboot", "halt",
-    "sudo", "su", "chmod", "chown", "kill", "pkill", "wget",
-    "curl", "nc", "netcat", "bash", "sh", "python", "perl",
-    "iptables", "passwd", "useradd", "userdel"
-}
+# Sandbox root — all relative paths are resolved under this directory
+SANDBOX_ROOT = os.path.abspath(os.getenv("SANDBOX_ROOT", "./sandbox"))
 
 
-# ── Path Sanitization ─────────────────────────────────────────────────────────
+def _resolve(path: str) -> str:
+    """Resolve path inside sandbox. Prevents escaping the sandbox."""
+    if os.path.isabs(path):
+        return path
+    return os.path.join(SANDBOX_ROOT, path)
 
-def sanitize_path(raw_path: str) -> dict:
+
+def safe_file_read(path: str) -> dict:
     """
-    Validate and sanitize a file path before any operation.
-
-    Checks:
-      1. Path is not empty
-      2. No dangerous patterns (../, /etc, /root, etc.)
-      3. Path stays inside SAFE_BASE_DIR after resolving
-
-    Returns:
-        { "safe": True,  "path": <resolved_path> }
-        { "safe": False, "reason": <why_blocked> }
+    Read a file's content safely.
+    Returns: { success, content } or { success: False, error }
     """
-    if not raw_path or not raw_path.strip():
-        return {"safe": False, "reason": "Path cannot be empty."}
+    validation = validate_file_path(path)
+    if not validation["valid"]:
+        return {"success": False, "error": validation["reason"]}
 
-    raw_path = raw_path.strip()
-
-    # Check against dangerous patterns
-    for pattern in BLOCKED_PATH_PATTERNS:
-        if re.search(pattern, raw_path):
-            return {
-                "safe": False,
-                "reason": f"Blocked path pattern detected: '{pattern}' in '{raw_path}'."
-            }
-
-    # Resolve absolute path and make sure it stays inside sandbox
-    resolved = os.path.abspath(os.path.join(SAFE_BASE_DIR, raw_path.lstrip("/")))
-
-    if not resolved.startswith(SAFE_BASE_DIR):
-        return {
-            "safe": False,
-            "reason": f"Path escapes sandbox directory. Resolved: '{resolved}'."
-        }
-
-    return {"safe": True, "path": resolved}
-
-
-# ── Command Validation ────────────────────────────────────────────────────────
-
-def validate_command(command: str) -> dict:
-    """
-    Validate a shell command before execution.
-
-    Checks:
-      1. Command is not empty
-      2. Base command is not in BLOCKED_COMMANDS
-      3. Base command is in ALLOWED_COMMANDS whitelist
-
-    Returns:
-        { "safe": True }
-        { "safe": False, "reason": <why_blocked> }
-    """
-    if not command or not command.strip():
-        return {"safe": False, "reason": "Command cannot be empty."}
-
-    # Extract just the base command (first word)
-    base_cmd = command.strip().split()[0].lower()
-
-    # Check blocked list first
-    if base_cmd in BLOCKED_COMMANDS:
-        return {
-            "safe": False,
-            "reason": f"Command '{base_cmd}' is explicitly blocked for security reasons."
-        }
-
-    # Check against whitelist
-    if base_cmd not in ALLOWED_COMMANDS:
-        return {
-            "safe": False,
-            "reason": f"Command '{base_cmd}' is not in the allowed commands list."
-        }
-
-    return {"safe": True}
-
-
-# ── Syscall Operations ────────────────────────────────────────────────────────
-
-def do_file_read(path: str) -> dict:
-    """
-    Safely read a file from inside the sandbox.
-
-    Returns:
-        { "success": True,  "content": <file_content> }
-        { "success": False, "reason": <error_message> }
-    """
-    check = sanitize_path(path)
-    if not check["safe"]:
-        return {"success": False, "reason": check["reason"]}
-
-    safe_path = check["path"]
-
-    if not os.path.exists(safe_path):
-        return {"success": False, "reason": f"File not found: '{path}'."}
-
-    if not os.path.isfile(safe_path):
-        return {"success": False, "reason": f"'{path}' is not a file."}
+    resolved = _resolve(validation["sanitized_path"])
 
     try:
-        with open(safe_path, "r", encoding="utf-8", errors="replace") as f:
+        if not os.path.exists(resolved):
+            return {"success": False, "error": f"File not found: {path}"}
+        if not os.path.isfile(resolved):
+            return {"success": False, "error": f"Path is not a file: {path}"}
+
+        with open(resolved, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+
         return {"success": True, "content": content}
+
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied: {path}"}
     except Exception as e:
-        return {"success": False, "reason": f"Read error: {str(e)}"}
+        return {"success": False, "error": str(e)}
 
 
-def do_file_write(path: str, content: str) -> dict:
+def safe_file_write(path: str, data: str) -> dict:
     """
-    Safely write content to a file inside the sandbox.
-
-    Returns:
-        { "success": True,  "message": "Written successfully." }
-        { "success": False, "reason": <error_message> }
+    Write data to a file safely.
+    Returns: { success, message } or { success: False, error }
     """
-    check = sanitize_path(path)
-    if not check["safe"]:
-        return {"success": False, "reason": check["reason"]}
+    path_validation = validate_file_path(path)
+    if not path_validation["valid"]:
+        return {"success": False, "error": path_validation["reason"]}
 
-    safe_path = check["path"]
+    data_validation = validate_write_data(data)
+    if not data_validation["valid"]:
+        return {"success": False, "error": data_validation["reason"]}
 
-    # Create parent directories if they don't exist
-    os.makedirs(os.path.dirname(safe_path), exist_ok=True)
+    resolved = _resolve(path_validation["sanitized_path"])
 
     try:
-        with open(safe_path, "w", encoding="utf-8") as f:
-            f.write(content or "")
-        return {"success": True, "message": f"File '{path}' written successfully."}
+        os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+        with open(resolved, "w", encoding="utf-8") as f:
+            f.write(data)
+        return {"success": True, "message": "Write successful"}
+
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied: {path}"}
     except Exception as e:
-        return {"success": False, "reason": f"Write error: {str(e)}"}
+        return {"success": False, "error": str(e)}
 
 
-def do_file_delete(path: str) -> dict:
+def safe_file_delete(path: str) -> dict:
     """
-    Safely delete a file from inside the sandbox.
-
-    Returns:
-        { "success": True,  "message": "Deleted successfully." }
-        { "success": False, "reason": <error_message> }
+    Delete a file safely.
+    Returns: { success, message } or { success: False, error }
     """
-    check = sanitize_path(path)
-    if not check["safe"]:
-        return {"success": False, "reason": check["reason"]}
+    validation = validate_file_path(path)
+    if not validation["valid"]:
+        return {"success": False, "error": validation["reason"]}
 
-    safe_path = check["path"]
-
-    if not os.path.exists(safe_path):
-        return {"success": False, "reason": f"File not found: '{path}'."}
-
-    if not os.path.isfile(safe_path):
-        return {"success": False, "reason": f"'{path}' is not a regular file."}
+    resolved = _resolve(validation["sanitized_path"])
 
     try:
-        os.remove(safe_path)
-        return {"success": True, "message": f"File '{path}' deleted successfully."}
+        if not os.path.exists(resolved):
+            return {"success": False, "error": f"File not found: {path}"}
+        if not os.path.isfile(resolved):
+            return {"success": False, "error": "Only files can be deleted via this gateway."}
+
+        os.remove(resolved)
+        return {"success": True, "message": f"File deleted: {path}"}
+
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied: {path}"}
     except Exception as e:
-        return {"success": False, "reason": f"Delete error: {str(e)}"}
+        return {"success": False, "error": str(e)}
 
 
-def do_execute(command: str) -> dict:
+def safe_dir_list(path: str) -> dict:
     """
-    Safely execute a whitelisted shell command.
-
-    Returns:
-        { "success": True,  "output": <stdout>, "stderr": <stderr> }
-        { "success": False, "reason": <error_message> }
+    List directory contents safely.
+    Returns: { success, entries: [{ name, type, size }] }
     """
-    check = validate_command(command)
-    if not check["safe"]:
-        return {"success": False, "reason": check["reason"]}
+    validation = validate_file_path(path)
+    if not validation["valid"]:
+        return {"success": False, "error": validation["reason"]}
+
+    resolved = _resolve(validation["sanitized_path"])
 
     try:
-        result = subprocess.run(
-            command.strip().split(),
-            capture_output=True,
-            text=True,
-            timeout=5,          # never hang more than 5 seconds
-            cwd=SAFE_BASE_DIR   # run inside the sandbox directory
-        )
-        return {
-            "success": True,
-            "output":  result.stdout,
-            "stderr":  result.stderr,
-        }
-    except subprocess.TimeoutExpired:
-        return {"success": False, "reason": "Command timed out after 5 seconds."}
+        if not os.path.exists(resolved):
+            return {"success": False, "error": f"Directory not found: {path}"}
+        if not os.path.isdir(resolved):
+            return {"success": False, "error": f"Path is not a directory: {path}"}
+
+        entries = []
+        for name in os.listdir(resolved):
+            full = os.path.join(resolved, name)
+            entries.append({
+                "name": name,
+                "type": "dir" if os.path.isdir(full) else "file",
+                "size": os.path.getsize(full) if os.path.isfile(full) else None,
+            })
+
+        return {"success": True, "entries": sorted(entries, key=lambda x: (x["type"], x["name"]))}
+
+    except PermissionError:
+        return {"success": False, "error": f"Permission denied: {path}"}
     except Exception as e:
-        return {"success": False, "reason": f"Execution error: {str(e)}"}
+        return {"success": False, "error": str(e)}
