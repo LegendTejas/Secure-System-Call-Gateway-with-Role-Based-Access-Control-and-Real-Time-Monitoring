@@ -11,6 +11,8 @@
  *   changeUserRole(id)
  *   revokeUserSession(id)
  *   unflagUser(id)
+ *   toggleAddUserForm()
+ *   doAdminRegister()
  */
 
 // ── Load Users Page ───────────────────────────────────────────────────────────
@@ -18,6 +20,13 @@
 window.loadUsersPage = async function() {
   const grid = document.getElementById('users-grid');
   if (!grid) return;
+  
+  const role = localStorage.getItem('sg_role') || 'guest';
+  const addUserBtn = document.getElementById('add-user-toggle-btn');
+  if (addUserBtn) {
+    // Only Admin and Developer can see the Add User button
+    addUserBtn.style.display = (role === 'admin' || role === 'developer') ? 'block' : 'none';
+  }
 
   grid.innerHTML = `
     <div style="grid-column:1/-1;padding:28px;text-align:center;
@@ -283,3 +292,59 @@ function _riskLevel(score) {
   if (score >= 20) return 'medium';
   return 'low';
 }
+
+// ── Admin-driven Registration ───────────────────────────────────────────────
+
+window.toggleAddUserForm = function() {
+  const card = document.getElementById('add-user-card');
+  const btn  = document.getElementById('add-user-toggle-btn');
+  if (!card) return;
+  
+  const isOpen = card.style.display === 'block';
+  card.style.display = isOpen ? 'none' : 'block';
+  if (btn) btn.textContent = isOpen ? '+ Add User' : 'Close Form';
+  
+  // Clear error on toggle
+  const err = document.getElementById('admin-reg-error');
+  if (err) err.textContent = '';
+};
+
+window.doAdminRegister = async function() {
+  const username = document.getElementById('admin-reg-username')?.value?.trim();
+  const email    = document.getElementById('admin-reg-email')?.value?.trim();
+  const password = document.getElementById('admin-reg-password')?.value;
+  const role     = document.getElementById('admin-reg-role')?.value;
+  const errEl    = document.getElementById('admin-reg-error');
+
+  if (!username || !password) {
+    if (errEl) errEl.textContent = '⚠ Username and Password are required.';
+    return;
+  }
+
+  if (errEl) errEl.textContent = 'Registering…';
+
+  try {
+    // Calling the protected /api/auth/register endpoint
+    const result = await api('POST', '/api/auth/register', { 
+      username, email, password, role 
+    });
+
+    if (!result.ok) {
+      if (errEl) errEl.textContent = `✗ ${result.data?.error || 'Registration failed'}`;
+      return;
+    }
+
+    showToast('success', `User '${username}' added successfully.`);
+    toggleAddUserForm(); // Hide form
+    
+    // Clear inputs
+    document.getElementById('admin-reg-username').value = '';
+    document.getElementById('admin-reg-email').value = '';
+    document.getElementById('admin-reg-password').value = '';
+    
+    // Refresh the user list
+    await loadUsersPage();
+  } catch (err) {
+    if (errEl) errEl.textContent = '✗ Network error occurred.';
+  }
+};
