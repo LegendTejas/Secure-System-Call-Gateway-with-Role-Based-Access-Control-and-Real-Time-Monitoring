@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SysCallGuardian — System Call Gateway</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-view" class="view active">
+  <div class="login-top-brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+        <path d="M12 2L4 6v6c0 5.25 3.5 10 8 12 4.5-2 8-6.75 8-12V6z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">SysCallGuardian</div>
+      <div class="brand-tag">SYSTEM CALL GATEWAY v1.0</div>
+    </div>
+  </div>
+  <div class="login-card" id="login-card-main">
+    <h2>Welcome back</h2>
+    <p class="subtitle">Select your role and enter credentials to access the gateway.</p>
+    <div class="role-selector">
+      <div class="role-btn active" onclick="setRole(this,'Admin')"><span class="role-icon">🛡️</span><span class="role-label">Admin</span></div>
+      <div class="role-btn" onclick="setRole(this,'Developer')"><span class="role-icon">⚙️</span><span class="role-label">Dev</span></div>
+      <div class="role-btn" onclick="setRole(this,'Guest')"><span class="role-icon">👤</span><span class="role-label">Guest</span></div>
+    </div>
+    <div class="form-group"><label>Username</label><input type="text" id="username" placeholder="Enter your username" autocomplete="off"/></div>
+    <div class="form-group"><label>Password</label><div class="input-row"><input type="password" id="password" placeholder="••••••••••"/><span class="input-icon" onclick="togglePwd()">👁</span></div></div>
+    <div id="fp-link-container" style="display:flex; justify-content:flex-end; margin-top:-8px; margin-bottom:16px;">
+      <button type="button" class="link-btn" onclick="openForgotPwdModal()">Forgot Password?</button>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Access Gateway →</button>
+    <div id="error-msg" class="error-msg">⚠️ Invalid credentials. Please check your username and password.</div>
+    <div class="divider">secured with bcrypt · SHA-256</div>
+    <div class="security-badge">🔒 &nbsp; Session expires in 4 hours</div>
+    <div class="feature-pills" style="margin-top:20px; justify-content:center;">
+      <span class="pill">RBAC</span><span class="pill">bcrypt auth</span><span class="pill">SHA-256 logs</span><span class="pill">threat detection</span>
+    </div>
+    <div id="signup-link-container" style="display: none; text-align: center; margin-top: 16px; font-size: 13px; color: var(--text3);">
+      Don't have an account? <button type="button" class="link-btn" onclick="toggleRegister()" style="font-size:13px;">Sign Up</button>
+    </div>
+  </div>
+
+  <div class="login-card" id="register-card" style="display: none;">
+    <h2>Create Account</h2>
+    <p class="subtitle">Register to get Guest access to the gateway.</p>
+    <div class="form-group"><label>Username</label><input type="text" id="reg-username" placeholder="Choose a username" autocomplete="off"/></div>
+    <div class="form-group"><label>Email address</label><input type="email" id="reg-email" placeholder="example@domain.com" autocomplete="off"/></div>
+    <div class="form-group"><label>Password</label><div class="input-row"><input type="password" id="reg-password" placeholder="••••••••••"/><span class="input-icon" onclick="toggleRegPwd()">👁</span></div></div>
+    <div class="form-group"><label>Confirm Password</label><input type="password" id="reg-password-confirm" placeholder="••••••••••"/></div>
+    <button class="login-btn" onclick="doRegister()" style="margin-top: 16px;">Create Account</button>
+    <div id="reg-error-msg" class="error-msg">⚠️ Error registering.</div>
+    <div style="text-align: center; margin-top: 16px; font-size: 13px; color: var(--text3);">
+      Already have an account? <button type="button" class="link-btn" onclick="toggleRegister()" style="font-size:13px;">Log In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="dashboard-view" class="view">
+  <nav class="topnav">
+    <div class="nav-brand">
+      <div class="nav-brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round">
+          <path d="M12 2L4 6v6c0 5.25 3.5 10 8 12 4.5-2 8-6.75 8-12V6z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <span class="nav-brand-name">SysCallGuardian</span>
+    </div>
+    <div class="nav-status"><div class="status-dot"></div>GATEWAY ACTIVE · 3 NODES</div>
+    <div class="nav-right">
+      <div class="nav-user">
+        <div class="avatar" id="nav-avatar">A</div>
+        <div class="nav-user-info">
+          <div class="name" id="nav-username">admin</div>
+          <div class="role" id="nav-role">Admin</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-body">
+    <aside class="sidebar">
+      <span class="sidebar-section-label" id="label-monitor">Monitor</span>
+      <div class="nav-item active" id="nav-overview" onclick="goPage('overview')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
+        Overview
+      </div>
+      <div class="nav-item" id="nav-live" onclick="goPage('live')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,11 5,7 8,9 12,4 15,6"/></svg>
+        Live Activity
+        <span class="nav-badge" id="live-badge">0</span>
+      </div>
+      <span class="sidebar-section-label" id="label-access">Access</span>
+      <div class="nav-item" id="nav-users" onclick="goPage('users')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        Users & Roles
+      </div>
+      <div class="nav-item" id="nav-policies" onclick="goPage('policies')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="1" width="10" height="14" rx="1.5"/><line x1="5" y1="5" x2="11" y2="5"/><line x1="5" y1="8" x2="11" y2="8"/><line x1="5" y1="11" x2="9" y2="11"/></svg>
+        Policies
+      </div>
+      <div class="nav-item" id="nav-syscalls" onclick="goPage('syscalls')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="2" width="14" height="12" rx="2"/>
+          <path d="M4 6l3 3-3 3M9 12h3"/>
+        </svg>
+        System Calls
+      </div>
+      <span class="sidebar-section-label" id="label-security">Security</span>
+      <div class="nav-item" id="nav-threats" onclick="goPage('threats')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 8 3.5-1.5 6-4.5 6-8V4z"/></svg>
+        Threat Detection
+        <span class="nav-badge">0</span>
+      </div>
+      <div class="nav-item" id="nav-logs" onclick="goPage('logs')">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 4h14M1 8h14M1 12h10"/></svg>
+        Audit Logs
+      </div>
+      <button class="logout-btn" onclick="doLogout()">
+        <svg style="width:15px;height:15px" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 3l4 5-4 5M15 8H7M5 1H2a1 1 0 00-1 1v12a1 1 0 001 1h3"/></svg>
+        Logout
+      </button>
+    </aside>
+
+    <main class="main-content">
+
+      <!-- ── OVERVIEW ── -->
+      <div class="page active" id="page-overview">
+        <div class="page-header">
+          <div><h1>System Overview</h1><p>Real-time analytics · unified security monitoring</p></div>
+          <div class="timestamp" id="clock">—</div>
+        </div>
+
+        <!-- NEW: Global Filter Bar for Overview -->
+        <div class="card" id="ov-filter-bar" style="margin-bottom:20px; padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span style="font-size:11px; font-family:var(--mono); color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Filters:</span>
+          <select class="filter-select" id="ov-filter-user" onchange="refreshDashboard()"><option value="ALL">All Users</option></select>
+          <select class="filter-select" id="ov-filter-status" onchange="refreshDashboard()">
+            <option value="ALL">All Status</option>
+            <option value="allowed">Allowed</option>
+            <option value="blocked">Blocked</option>
+            <option value="flagged">Flagged</option>
+          </select>
+          <select class="filter-select" id="ov-filter-call" onchange="refreshDashboard()"><option value="ALL">All Calls</option></select>
+          <select class="filter-select" id="ov-filter-role" onchange="refreshDashboard()">
+            <option value="ALL">All Roles</option>
+            <option value="admin">Admin</option>
+            <option value="developer">Developer</option>
+            <option value="guest">Guest</option>
+          </select>
+          <button class="btn sm" onclick="resetOverviewFilters()">Reset</button>
+          <span id="ov-filter-status-text" style="margin-left:auto; font-size:11px; font-family:var(--mono); color:var(--text3);">Syncing…</span>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card green" id="stat-total" onclick="goPage('logs')"><div class="stat-label">Total Syscalls</div><div class="stat-value">—</div><div class="stat-delta up">loading…</div></div>
+          <div class="stat-card green" id="stat-allowed" onclick="goPage('logs')"><div class="stat-label">Allowed</div><div class="stat-value">—</div><div class="stat-delta neutral">loading…</div></div>
+          <div class="stat-card red" id="stat-blocked" onclick="goPage('logs')"><div class="stat-label">Blocked</div><div class="stat-value">—</div><div class="stat-delta down">loading…</div></div>
+          <div class="stat-card amber" id="stat-flagged" onclick="goPage('threats')"><div class="stat-label">Flagged Users</div><div class="stat-value">—</div><div class="stat-delta warn">loading…</div></div>
+        </div>
+
+        <!-- Unified Rows -->
+        <div class="charts-row">
+          <!-- Activity Line -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Syscall Activity — Last 24 Hours</div><div class="card-subtitle">allowed · blocked split per hour</div></div>
+              <span class="tag live">● LIVE</span>
+            </div>
+            <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+          </div>
+          <!-- Distribution Donut -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Call Distribution</div><div class="card-subtitle">allowed · blocked · flagged</div></div>
+            </div>
+            <div class="chart-wrap" style="height:200px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="donutChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-row" id="chart-heatmap" style="grid-template-columns: 1.4fr 0.8fr;">
+          <!-- User Risk Analysis (moved here from bottom row) -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">User Risk Analysis</div><div class="card-subtitle">active threat scoring per user</div></div>
+            </div>
+            <div class="chart-wrap" style="height:220px;"><canvas id="riskBarChart"></canvas></div>
+          </div>
+          <!-- Role Pie -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Volume by Role</div><div class="card-subtitle">syscall share per RBAC role</div></div>
+            </div>
+            <div class="chart-wrap" style="height:220px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="rolePieChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-row" id="chart-risk">
+          <!-- Syscall Bars -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Top Syscalls by Decision</div><div class="card-subtitle">breakdown of results for specific calls</div></div>
+            </div>
+            <div class="chart-wrap" style="height:220px;"><canvas id="syscallBarChart"></canvas></div>
+          </div>
+          <!-- Heatmap (User x Syscall) — moved here, reduced size -->
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">User × Syscall Heatmap</div><div class="card-subtitle">activity intensity by user and call type</div></div>
+            </div>
+            <div id="heatmap-container" style="margin-top:8px; padding: 0 4px 4px;">
+              <div style="height:160px; display:flex; align-items:center; justify-content:center; color:var(--text3); font-family:var(--mono); font-size:12px;">Initializing heatmap…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Row: Timeline -->
+        <div class="card" style="margin-bottom:24px;">
+          <div class="card-header">
+            <div><div class="card-title">Syscall Timeline</div><div class="card-subtitle">event distribution across users over time</div></div>
+          </div>
+          <div class="chart-wrap" style="height:180px;"><canvas id="timelineChart"></canvas></div>
+        </div>
+
+        <div class="bottom-row">
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div><div class="card-title">Recent Syscall Logs</div><div class="card-subtitle">last 6 entries · click to view all</div></div>
+              <button class="btn sm" onclick="goPage('logs')">View All →</button>
+            </div>
+            <table class="log-table" id="ov-recent-table">
+              <thead><tr><th>User</th><th>Call Type</th><th>Status</th><th>Time</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header" style="margin-bottom:14px;">
+              <div><div class="card-title">Suspicious Users</div><div class="card-subtitle">risk-scored · click for details</div></div>
+              <button class="btn sm" onclick="goPage('threats')">View All →</button>
+            </div>
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- ── LIVE ACTIVITY ── -->
+      <div class="page" id="page-live">
+        <div class="page-header">
+          <div><h1>Live Activity Feed</h1><p>Real-time syscall stream · auto-updating every 2s</p></div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn" onclick="toggleLiveFeed(this)">⏸ Pause</button>
+            <div class="timestamp" id="clock2">—</div>
+          </div>
+        </div>
+        <div class="counter-bar">
+          <div class="counter-item"><div class="counter-dot g"></div><span id="cnt-allowed">Allowed: 0</span></div>
+          <div class="counter-item"><div class="counter-dot r"></div><span id="cnt-blocked">Blocked: 0</span></div>
+          <div class="counter-item"><div class="counter-dot a"></div><span id="cnt-susp">Suspicious: 0</span></div>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text3)" id="live-rate">Real-time sync active</span>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--text3);">
+            <span style="width:70px">STATUS</span><span style="width:100px">USER</span><span style="flex:1">SYSCALL · PATH</span><span style="width:72px;text-align:right">TIME</span>
+          </div>
+          <div class="live-feed-wrap" id="live-feed"></div>
+        </div>
+      </div>
+
+      <!-- ── USERS & ROLES ── -->
+      <div class="page" id="page-users">
+        <div class="page-header">
+        <div>
+          <h1>Users & Roles</h1>
+          <p>Manage access levels, evaluate risk profiles, and revoke sessions.</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn sm" onclick="loadUsersPage()" style="font-family:var(--mono);">
+            <span style="font-size:14px;margin-right:4px;">🔄</span> Sync
+          </button>
+          <button class="btn primary" onclick="showToast('info','User creation form coming next!')">+ Add User</button>
+        </div>
+      </div>
+        
+        <!-- Summary Stats Row -->
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:14px;margin-bottom:20px;">
+          <div class="card" style="padding:16px;">
+            <div class="stat-label">Total Users</div>
+            <div class="stat-value" id="user-count-total" style="font-size:24px;margin-top:4px;">—</div>
+          </div>
+          <div class="card" style="padding:16px;">
+            <div class="stat-label">Flagged</div>
+            <div class="stat-value" id="user-count-flagged" style="font-size:24px;margin-top:4px;color:var(--danger)">—</div>
+          </div>
+          <div class="card" style="padding:16px;">
+            <div class="stat-label">Admins</div>
+            <div class="stat-value" id="user-count-admin" style="font-size:24px;margin-top:4px;color:var(--accent)">—</div>
+          </div>
+        </div>
+        <div class="users-grid" id="users-grid">
+           <!-- Populated by JS in Phase 4 -->
+           <div style="padding:20px;color:var(--text3);font-family:var(--mono);font-size:12px">User management module active.</div>
+        </div>
+      </div>
+
+      <!-- ── POLICIES ── -->
+      <div class="page" id="page-policies">
+        <div class="page-header">
+        <div>
+          <h1>Security Policies</h1>
+          <p>Visual rule engine for mediated system call access.</p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button class="btn sm" onclick="renderPolicies()" style="font-family:var(--mono);">
+            <span style="font-size:14px;margin-right:4px;">🔄</span> Sync
+          </button>
+          <button class="btn primary" onclick="openCreatePolicyModal()">+ New Policy</button>
+        </div>
+      </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;">
+          <div class="card"><div class="stat-label">Active Policies</div><div class="stat-value" id="active-policy-count" style="font-size:24px;font-weight:400;margin-top:6px;">—</div></div>
+          <div class="card"><div class="stat-label">Blocked by Policy (today)</div><div class="stat-value" style="font-size:24px;font-weight:400;margin-top:6px;color:var(--danger)">--</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Active Rules</div><span class="tag live">Loading…</span></div>
+          <div class="policy-list" id="policy-list"></div>
+        </div>
+      </div>
+
+      <!-- ── PAGE: SYSTEM CALLS ── -->
+      <div class="page" id="page-syscalls">
+        <div class="page-header">
+          <div>
+            <h1>System Call Gateway</h1>
+            <p>Execute syscalls through the mediation layer · RBAC enforced · every call logged</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn sm" onclick="clearSyscallHistory()">Clear History</button>
+            <div class="timestamp" id="syscall-role-badge">—</div>
+          </div>
+        </div>
+
+        <!-- Permission map for current role -->
+        <div id="role-permissions-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:16px;">
+
+          <!-- Left: Input Panel -->
+          <div style="display:flex;flex-direction:column;gap:12px;">
+
+            <!-- Operation selector -->
+            <div class="card" style="padding:16px;">
+              <div class="card-title" style="margin-bottom:14px;">Select Operation</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="op-selector">
+                <div class="op-btn active" data-op="file_read" onclick="selectOp(this)">
+                  <div class="op-icon">📄</div>
+                  <div class="op-label">Read File</div>
+                  <div class="op-perm">file_read</div>
+                </div>
+                <div class="op-btn" data-op="file_write" onclick="selectOp(this)">
+                  <div class="op-icon">✏️</div>
+                  <div class="op-label">Write File</div>
+                  <div class="op-perm">file_write</div>
+                </div>
+                <div class="op-btn" data-op="file_delete" onclick="selectOp(this)">
+                  <div class="op-icon">🗑️</div>
+                  <div class="op-label">Delete File</div>
+                  <div class="op-perm">file_delete</div>
+                </div>
+                <div class="op-btn" data-op="dir_list" onclick="selectOp(this)">
+                  <div class="op-icon">📁</div>
+                  <div class="op-label">List Directory</div>
+                  <div class="op-perm">dir_list</div>
+                </div>
+                <div class="op-btn" data-op="system_info" onclick="selectOp(this)">
+                  <div class="op-icon">ℹ️</div>
+                  <div class="op-label">System Info</div>
+                  <div class="op-perm">system_info</div>
+                </div>
+                <div class="op-btn" data-op="exec_process" onclick="selectOp(this)" style="grid-column:1/-1;">
+                  <div class="op-icon">⚡</div>
+                  <div class="op-label">Execute Process</div>
+                  <div class="op-perm">exec_process</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic input form -->
+            <div class="card" style="padding:16px;">
+              <div class="card-title" style="margin-bottom:14px;" id="input-form-title">Read File</div>
+
+              <!-- file_read / file_write / file_delete / dir_list fields -->
+              <div id="field-filepath">
+                <div class="form-group">
+                  <label>File / Directory Path</label>
+                  <input type="text" id="input-filepath" placeholder="e.g. test.txt or /home/user/docs"
+                    style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);outline:none;"
+                    oninput="updatePreview()" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"/>
+                </div>
+              </div>
+
+              <!-- file_write: data field -->
+              <div id="field-writedata" style="display:none;">
+                <div class="form-group" style="margin-top:10px;">
+                  <label>Data to Write</label>
+                  <textarea id="input-writedata" rows="3" placeholder="Content to write to file…"
+                    style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);outline:none;resize:vertical;"
+                    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+                </div>
+              </div>
+
+              <!-- exec_process: command field -->
+              <div id="field-command" style="display:none;">
+                <div class="form-group">
+                  <label>Command</label>
+                  <input type="text" id="input-command" placeholder="e.g. ls -la or python3 script.py"
+                    style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);outline:none;"
+                    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+                    onkeydown="if(event.key==='Enter') executeSyscall()"/>
+                  <div style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:6px;">
+                    Allowed: ls · pwd · python3 · echo · cat · head · grep · find · mkdir · touch
+                  </div>
+                </div>
+              </div>
+
+              <!-- Command preview -->
+              <div id="cmd-preview" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--mono);font-size:12px;color:var(--text3);margin-bottom:14px;">
+                <span style="color:var(--accent-mid)">POST</span> /api/syscall/read · <span id="preview-text">{ "file_path": "" }</span>
+              </div>
+
+              <button id="exec-btn" class="btn primary" style="width:100%;justify-content:center;padding:12px;" onclick="executeSyscall()">
+                Execute →
+              </button>
+            </div>
+
+            <!-- Quick test scenarios -->
+            <div class="card" style="padding:16px;">
+              <div class="card-title" style="margin-bottom:12px;">Quick Test Scenarios</div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div class="scenario-btn" onclick="loadScenario('allowed_read')">
+                  <span class="tag live" style="font-size:10px;min-width:56px;text-align:center;">ALLOWED</span>
+                  <span style="font-size:12px;font-family:var(--mono)">file_read · test.txt</span>
+                </div>
+                <div class="scenario-btn" onclick="loadScenario('blocked_exec')">
+                  <span class="tag danger-tag" style="font-size:10px;min-width:56px;text-align:center;">BLOCKED</span>
+                  <span style="font-size:12px;font-family:var(--mono)">exec_proc · cmd.exe /c (guest)</span>
+                </div>
+                <div class="scenario-btn" onclick="loadScenario('path_traversal')">
+                  <span class="tag danger-tag" style="font-size:10px;min-width:56px;text-align:center;">BLOCKED</span>
+                  <span style="font-size:12px;font-family:var(--mono)">file_read · ..\\..\\Windows\\System32</span>
+                </div>
+                <div class="scenario-btn" onclick="loadScenario('allowed_exec')">
+                  <span class="tag live" style="font-size:10px;min-width:56px;text-align:center;">ALLOWED</span>
+                  <span style="font-size:12px;font-family:var(--mono)">exec_proc · dir /p</span>
+                </div>
+                <div class="scenario-btn" onclick="loadScenario('system_dir')">
+                  <span class="tag danger-tag" style="font-size:10px;min-width:56px;text-align:center;">BLOCKED</span>
+                  <span style="font-size:12px;font-family:var(--mono)">dir_list · C:\\Windows\\System32\\config</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right: Terminal Output -->
+          <div style="display:flex;flex-direction:column;gap:12px;">
+
+            <div class="terminal-window" style="flex:1;">
+              <div class="terminal-header">
+                <div class="terminal-title-wrap">
+                  <span class="terminal-icon">>_</span>
+                  <span class="terminal-title">SysCallGuardian Terminal</span>
+                </div>
+                <div id="terminal-status" class="terminal-status">ready</div>
+              </div>
+              <div id="terminal-output" class="terminal-body" style="min-height:320px;max-height:460px;">
+                <div class="terminal-line dim">SysCallGuardian v1.0 — System Call Mediation Terminal</div>
+                <div class="terminal-line dim">Authenticated as: <span id="terminal-user" style="color:var(--accent-mid);">—</span></div>
+                <div class="terminal-line dim">Type or select an operation above, then click Execute</div>
+                <div class="terminal-line dim" style="margin-top:6px;">────────────────────────────────────────</div>
+              </div>
+              <!-- Typing indicator -->
+              <div id="terminal-thinking"
+                style="display:none;background:#080C0A;padding:0 20px 16px;font-family:var(--mono);font-size:12px;color:rgba(255,255,255,0.3);position:relative;z-index:3;">
+                <span class="blink-cursor">▋</span> Executing…
+              </div>
+            </div>
+
+            <!-- Last result card -->
+            <div class="card" id="last-result-card" style="display:none;padding:16px;">
+              <div class="card-header" style="margin-bottom:12px;">
+                <div class="card-title">Last Result</div>
+                <span id="last-result-badge"></span>
+              </div>
+              <div id="last-result-body"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Session Call History -->
+        <div style="margin-top:16px;">
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div class="card-title">Session Call History</div>
+                <div class="card-subtitle">calls made this session · all logged to audit trail</div>
+              </div>
+              <span id="history-count" class="tag info-tag">0 calls</span>
+            </div>
+            <table class="log-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Operation</th><th>Path / Command</th>
+                  <th>Status</th><th>Reason</th><th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="syscall-history-tbody">
+                <tr>
+                  <td colspan="6" style="text-align:center;padding:20px;color:var(--text3);font-family:var(--mono);font-size:12px;">
+                    No calls made yet this session
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── THREATS ── -->
+      <div class="page" id="page-threats">
+        <div class="page-header">
+          <div><h1>Threat Detection</h1><p>Rule-based detection · risk scoring · live alerts</p></div>
+          <button class="btn danger" onclick="showToast('danger','Alert broadcast sent to all admins!')">⚠ Broadcast Alert</button>
+        </div>
+        <div class="threat-grid">
+          <div class="threat-card alert-card"><div class="stat-label" style="color:var(--danger)">Critical Threats</div><div class="threat-value" style="color:var(--danger)">0</div><div class="sus-meta">No critical alerts</div></div>
+          <div class="threat-card"><div class="stat-label">Medium Risk</div><div class="threat-value" style="color:var(--warning)">0</div><div class="sus-meta">Scanning user activity…</div></div>
+          <div class="threat-card"><div class="stat-label">Blocked Attempts Today</div><div class="threat-value">0</div><div class="stat-delta down">live computing…</div></div>
+          <div class="threat-card"><div class="stat-label">Risk Engine Status</div><div class="threat-value" style="color:var(--accent);font-size:18px;margin-top:12px">● ACTIVE</div><div class="sus-meta">Real-time scoring · SHA-256 log chain</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Threat Events</div><span class="tag danger-tag">Checking…</span></div>
+          <div class="threat-events">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AUDIT LOGS ── -->
+      <div class="page" id="page-logs">
+        <div class="page-header">
+          <div><h1>Audit Logs</h1><p>Full syscall log · SHA-256 integrity chain · filterable</p></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" onclick="verifyIntegrity()">🔐 Verify Integrity</button>
+            <button class="btn" onclick="showToast('success','Log export initiated!')">↓ Export CSV</button>
+          </div>
+        </div>
+
+        <div class="integrity-banner idle" id="integrity-banner">
+          🔒 SHA-256 chain not yet verified — click "Verify Integrity" to check
+        </div>
+
+        <div class="filter-bar">
+          <select class="filter-select" id="filter-status" onchange="renderLogs()"><option value="">All Status</option><option value="allowed">Allowed</option><option value="blocked">Blocked</option><option value="suspicious">Suspicious</option></select>
+          <select class="filter-select" id="filter-user" onchange="renderLogs()"><option value="">All Users</option></select>
+          <select class="filter-select" id="filter-call" onchange="renderLogs()"><option value="">All Call Types</option></select>
+          <input class="search-input" id="log-search" placeholder="Search path or user…" oninput="renderLogs()"/>
+          <button class="btn sm" onclick="document.getElementById('filter-status').value='';document.getElementById('filter-user').value='';document.getElementById('filter-call').value='';document.getElementById('log-search').value='';renderLogs()">Clear</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <table class="log-table" id="log-table">
+            <thead><tr><th>#ID</th><th>User</th><th>Operation</th><th>Path / Target</th><th>Status</th><th>Time</th><th>Hash Chain</th></tr></thead>
+            <tbody id="log-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-title">Detail</div><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ══ FORGOT PASSWORD MODAL ══ -->
+<div class="fp-modal-overlay" id="fp-modal-overlay" onclick="closeForgotPwdModal(event)">
+  <div class="fp-modal">
+    <button class="fp-modal-close" onclick="closeForgotPwdModal()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 6L6 18M6 6l12 12"></path>
+      </svg>
+    </button>
+    
+    <div class="fp-modal-header">
+      <h2 class="fp-modal-title">Account Recovery</h2>
+      <p class="fp-modal-desc">Enter your username or email address to continue.</p>
+    </div>
+
+    <div id="fp-step-1">
+      <div class="fp-form-group">
+        <input type="text" id="fp-identity" class="fp-input" placeholder="Username or Email" autocomplete="off" />
+      </div>
+      <button type="button" class="fp-btn" onclick="handleForgotPwdIdentity()">Continue →</button>
+    </div>
+
+    <div id="fp-step-2" style="display: none;">
+      <div class="fp-role-container" id="fp-dynamic-content"></div>
+    </div>
+
+    <div id="fp-step-3" style="display: none;">
+      <div class="fp-form-group">
+        <label style="font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase;">Verification Code</label>
+        <input type="text" id="fp-otp" class="fp-input" placeholder="000000" autocomplete="off" style="letter-spacing: 4px; font-family: var(--mono); text-align: center; font-size: 18px;" />
+      </div>
+      <div class="fp-form-group">
+        <label style="font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase;">New Password</label>
+        <div class="input-row">
+            <input type="password" id="fp-new-pwd" class="fp-input" placeholder="••••••••••" />
+            <span class="input-icon" onclick="toggleFPPwd('fp-new-pwd')">👁</span>
+        </div>
+      </div>
+      <div class="fp-form-group">
+        <label style="font-size: 11px; color: var(--text3); font-family: var(--mono); text-transform: uppercase;">Confirm New Password</label>
+        <input type="password" id="fp-new-pwd-confirm" class="fp-input" placeholder="••••••••••" />
+      </div>
+      <button type="button" class="fp-btn" onclick="saveNewPassword()">Reset Password</button>
+      <div id="fp-reset-error" class="error-msg">⚠️ Passwords do not match or invalid OTP.</div>
+    </div>
+    
+    <div id="fp-step-3-neutral" style="display: none;">
+      <div class="fp-neutral-state">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="fp-neutral-icon">
+          <path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <p style="font-weight: 500; font-size: 14px; margin-bottom: 8px;">Admin Recovery Initiated</p>
+        <p style="text-align: left; font-size: 13px;">A password reset was requested for the admin account: Tejax.</p>
+        <p style="text-align: left; font-size: 13px; margin-top: 8px;">Our security team has been notified. If this is legitimate, please await authorization. If you did not request this, action is required immediately.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/policy_editor.js"></script>
+<script src="js/user_management.js"></script>
+<script src="js/dashboard-charts.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// SYSTEM CALL PANEL — Vanshika's Integration
+// ══════════════════════════════════════════════════════════
+
+let currentOp      = 'file_read';
+let syscallHistory = [];
+let callCounter    = 0;
+
+// Endpoint map — operation → API endpoint
+const SYSCALL_ENDPOINTS = {
+  file_read:    '/api/syscall/read',
+  file_write:   '/api/syscall/write',
+  file_delete:  '/api/syscall/delete',
+  dir_list:     '/api/syscall/dir_list',
+  exec_process: '/api/syscall/execute',
+  system_info:  '/api/syscall/system_info',
+};
+
+// Operations that require no input fields
+const NO_INPUT_OPS = ['system_info'];
+
+// Permissions each role has (mirrors roles.py)
+const ROLE_PERMISSIONS = {
+  Admin:     ['file_read','file_write','file_delete','dir_list','exec_process','system_dir_access','view_logs','manage_policies','system_info'],
+  Developer: ['file_read','file_write','dir_list','exec_process','view_logs','system_info'],
+  Guest:     ['file_read','dir_list','system_info'],
+};
+
+// ── Init syscall page ─────────────────────────────────────
+function initSyscallPage() {
+  const username = localStorage.getItem('sg_username') || '—';
+  const role     = localStorage.getItem('sg_role')     || 'guest';
+  // Normalize role: capitalize first letter for ROLE_PERMISSIONS lookup
+  const roleKey  = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+
+  // Update terminal header
+  const tu = document.getElementById('terminal-user');
+  if (tu) tu.textContent = `${username} (${roleKey})`;
+
+  // Update role badge
+  const badge = document.getElementById('syscall-role-badge');
+  if (badge) badge.textContent = roleKey + ' mode';
+
+  // Render permission chips
+  renderPermissionChips(roleKey);
+
+  // Mark/hide blocked operations
+  markBlockedOps(roleKey);
+
+  // Select first allowed op for this role
+  const firstAllowed = ROLE_PERMISSIONS[roleKey]?.[0] || 'file_read';
+  const firstBtn = document.querySelector(`.op-btn[data-op="${firstAllowed}"]`);
+  if (firstBtn) selectOp(firstBtn);
+
+  // Write welcome message only once (check if terminal already has content)
+  const out = document.getElementById('terminal-output');
+  if (out && out.querySelectorAll('.terminal-line').length === 0) {
+    terminalLine('SysCallGuardian v1.0 — System Call Mediation Terminal', 'dim');
+    terminalLine(`Authenticated as: ${username} (${roleKey})`, 'dim');
+    terminalLine('────────────────────────────────────────', 'dim');
+  }
+}
+
+function renderPermissionChips(roleKey) {
+  const bar   = document.getElementById('role-permissions-bar');
+  if (!bar) return;
+  const perms = ['file_read','file_write','file_delete','dir_list','exec_process','system_info'];
+  const has   = ROLE_PERMISSIONS[roleKey] || [];
+  bar.innerHTML = perms.map(p => `
+    <div class="perm-chip ${has.includes(p)?'has':'no'}">
+      ${has.includes(p) ? '✓' : '✗'} ${p}
+    </div>`).join('');
+}
+
+function markBlockedOps(roleKey) {
+  const has = ROLE_PERMISSIONS[roleKey] || [];
+  document.querySelectorAll('.op-btn').forEach(btn => {
+    const perm = btn.dataset.op;
+    if (!has.includes(perm)) {
+      if (roleKey === 'Guest') {
+        btn.style.display = 'none';
+      } else {
+        btn.classList.add('blocked-op');
+        btn.style.display = 'flex';
+        btn.title = `${roleKey} role cannot perform ${perm}`;
+      }
+    } else {
+      btn.classList.remove('blocked-op');
+      btn.style.display = 'flex';
+      btn.title = '';
+    }
+  });
+}
+
+// ── Operation selector ────────────────────────────────────
+function selectOp(el) {
+  if (!el) return;
+
+  // RBAC check before selecting
+  const role    = localStorage.getItem('sg_role') || 'guest';
+  const roleKey = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+  const has     = ROLE_PERMISSIONS[roleKey] || [];
+  const perm    = el.dataset.op;
+
+  if (!has.includes(perm)) {
+    terminalLine(`✗ Permission denied: ${roleKey} cannot perform ${perm}`, 'blocked');
+    showToast('danger', `${roleKey} role cannot perform ${perm}`);
+    return;
+  }
+
+  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentOp = el.dataset.op;
+
+  const titles = {
+    file_read:    'Read File',
+    file_write:   'Write File',
+    file_delete:  'Delete File',
+    dir_list:     'List Directory',
+    exec_process: 'Execute Process',
+    system_info:  'System Information',
+  };
+
+  const titleEl = document.getElementById('input-form-title');
+  if (titleEl) titleEl.textContent = titles[currentOp] || 'System Call';
+
+  // Show/hide relevant fields
+  const needsPath    = ['file_read','file_write','file_delete','dir_list'].includes(currentOp);
+  const needsWrite   = currentOp === 'file_write';
+  const needsCommand = currentOp === 'exec_process';
+  document.getElementById('field-filepath').style.display  = needsPath    ? 'block' : 'none';
+  document.getElementById('field-writedata').style.display = needsWrite   ? 'block' : 'none';
+  document.getElementById('field-command').style.display   = needsCommand ? 'block' : 'none';
+
+  // Update execute button text
+  const execBtn = document.getElementById('exec-btn');
+  const btnLabels = { file_read:'Read File →', file_write:'Write File →', file_delete:'Delete File →',
+                      dir_list:'List Directory →', exec_process:'Execute Process →', system_info:'Fetch Info →' };
+  if (execBtn) execBtn.textContent = btnLabels[currentOp] || 'Execute →';
+
+  updatePreview();
+}
+
+function updatePreview() {
+  const previewEl  = document.getElementById('preview-text');
+  const endpointEl = document.getElementById('cmd-preview');
+  if (!previewEl) return;
+
+  const endpoint = SYSCALL_ENDPOINTS[currentOp] || '/api/syscall/read';
+  const endpointSpan = endpointEl.querySelector('span:first-child');
+  if (endpointSpan) endpointSpan.nextSibling.textContent = ` ${endpoint} · `;
+
+  if (currentOp === 'exec_process') {
+    const cmd = document.getElementById('input-command')?.value || '';
+    previewEl.textContent = `{ "command": "${cmd}" }`;
+  } else if (currentOp === 'file_write') {
+    const fp   = document.getElementById('input-filepath')?.value  || '';
+    const data = document.getElementById('input-writedata')?.value || '';
+    previewEl.textContent = `{ "file_path": "${fp}", "data": "…" }`;
+  } else {
+    const fp = document.getElementById('input-filepath')?.value || '';
+    previewEl.textContent = `{ "file_path": "${fp}" }`;
+  }
+}
+
+const SYSCALL_BTN_LABELS = {
+  file_read: 'Read File →', file_write: 'Write File →', file_delete: 'Delete File →',
+  dir_list: 'List Directory →', exec_process: 'Execute Process →', system_info: 'Fetch Info →'
+};
+
+// ── Execute syscall ───────────────────────────────────────
+async function executeSyscall() {
+  const btn = document.getElementById('exec-btn');
+  const thinking = document.getElementById('terminal-thinking');
+  if (!btn || btn.disabled) return;
+
+  // RBAC check
+  const role    = localStorage.getItem('sg_role') || 'guest';
+  const roleKey = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+  const has     = ROLE_PERMISSIONS[roleKey] || [];
+  if (!has.includes(currentOp)) {
+    terminalLine(`✗ Permission denied: ${roleKey} role cannot perform ${currentOp}`, 'blocked');
+    showToast('danger', `Access denied: ${currentOp}`);
+    return;
+  }
+
+  // Build request body based on operation
+  const endpoint = SYSCALL_ENDPOINTS[currentOp];
+  let body = {};
+  let displayTarget = currentOp;
+
+  if (currentOp === 'exec_process') {
+    const cmd = document.getElementById('input-command')?.value?.trim();
+    if (!cmd) { terminalLine('⚠ Enter a command first.', 'blocked'); return; }
+    body = { command: cmd };
+    displayTarget = cmd;
+  } else if (currentOp === 'system_info') {
+    // No input needed
+    body = {};
+    displayTarget = 'system_info';
+  } else {
+    const fp = document.getElementById('input-filepath')?.value?.trim();
+    if (!fp) { terminalLine('⚠ Enter a file path first.', 'blocked'); return; }
+    body = { file_path: fp };
+    displayTarget = fp;
+    if (currentOp === 'file_write') {
+      body.data = document.getElementById('input-writedata')?.value || '';
+    }
+  }
+
+  // UI: loading state
+  btn.disabled    = true;
+  btn.textContent = 'Executing…';
+  if (thinking) thinking.style.display = 'block';
+  const statusEl = document.getElementById('terminal-status');
+  if (statusEl) statusEl.textContent = 'executing…';
+
+  terminalLine(`$ ${currentOp} ${displayTarget !== currentOp ? displayTarget : ''}`.trim(), 'info');
+
+  // Make API call
+  let result;
+  try {
+    result = await api('POST', endpoint, body);
+  } catch (err) {
+    terminalLine('✗ Network error — cannot reach backend', 'blocked');
+    btn.disabled    = false;
+    btn.textContent = 'Execute →';
+    if (thinking) thinking.style.display = 'none';
+    if (statusEl) statusEl.textContent = 'error';
+    return;
+  }
+
+  // UI: reset
+  btn.disabled    = false;
+  btn.textContent = SYSCALL_BTN_LABELS[currentOp] || 'Execute →';
+  if (thinking) thinking.style.display = 'none';
+  if (statusEl) statusEl.textContent = 'ready';
+
+  const ts = new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+  if (!result || result.status === 0) {
+    terminalLine('✗ Network error — backend unreachable', 'blocked');
+    return;
+  }
+
+  const data   = result.data || {};
+  const status = data.status || (result.ok ? 'allowed' : 'blocked');
+
+  // Print result to terminal
+  terminalLine(`  Status   : ${status.toUpperCase()}`, status === 'allowed' ? 'allowed' : 'blocked');
+  if (data.reason)  terminalLine(`  Reason   : ${data.reason}`, 'blocked');
+  if (data.message) terminalLine(`  Message  : ${data.message}`, 'info');
+
+  if (data.content) {
+    terminalLine('  Content  :', 'info');
+    terminalLine(data.content.slice(0, 600) + (data.content.length > 600 ? '\n  [truncated]' : ''), 'output');
+  }
+  if (data.output) {
+    terminalLine('  Output   :', 'info');
+    terminalLine(data.output.slice(0, 600) + (data.output.length > 600 ? '\n  [truncated]' : ''), 'output');
+  }
+  if (data.entries && data.entries.length) {
+    terminalLine(`  Entries  : ${data.entries.length} items`, 'info');
+    data.entries.slice(0, 10).forEach(e =>
+      terminalLine(`  ${e.type === 'dir' ? '📁' : '📄'} ${e.name}${e.size != null ? ` (${e.size}B)` : ''}`, 'output')
+    );
+    if (data.entries.length > 10) terminalLine(`  … and ${data.entries.length - 10} more`, 'dim');
+  }
+
+  terminalLine(`  Time     : ${ts}`, 'dim');
+  terminalLine('────────────────────────────────────────', 'dim');
+
+  updateLastResultCard(status, data, displayTarget);
+
+  callCounter++;
+  syscallHistory.unshift({ n: callCounter, op: currentOp, target: displayTarget, status, reason: data.reason || '—', time: ts });
+  renderSyscallHistory();
+}
+
+
+
+function terminalLine(text, cls = 'info') {
+  const out = document.getElementById('terminal-output');
+  if (!out) return;
+  const line = document.createElement('div');
+  line.className = `terminal-line ${cls}`;
+  line.textContent = text;
+  out.appendChild(line);
+  out.scrollTop = out.scrollHeight;
+}
+
+function updateLastResultCard(status, data, target) {
+  const card  = document.getElementById('last-result-card');
+  const badge = document.getElementById('last-result-badge');
+  const body  = document.getElementById('last-result-body');
+  if (!card) return;
+
+  card.style.display = 'block';
+  badge.innerHTML    = statusBadgeHtml(status);
+
+  const fields = [
+    ['Operation',  currentOp],
+    ['Target',     target || '—'],
+    ['Status',     status.toUpperCase()],
+    data.reason ? ['Reason', data.reason] : null,
+    data.return_code != null ? ['Return Code', data.return_code] : null,
+  ].filter(Boolean);
+
+  body.innerHTML = fields.map(([label, val]) => `
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="color:var(--text3);font-family:var(--mono)">${label}</span>
+      <span style="font-family:var(--mono);color:${status==='allowed'?'var(--accent)':'var(--danger)'}">${val}</span>
+    </div>`).join('');
+}
+
+function renderSyscallHistory() {
+  const tbody = document.getElementById('syscall-history-tbody');
+  const count = document.getElementById('history-count');
+  if (!tbody) return;
+
+  if (count) count.textContent = `${syscallHistory.length} call${syscallHistory.length!==1?'s':''}`;
+
+  tbody.innerHTML = syscallHistory.map(h => `
+    <tr>
+      <td class="mono-text">#${h.n}</td>
+      <td class="mono-text">${h.op}</td>
+      <td class="mono-text" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.target}</td>
+      <td>${statusBadgeHtml(h.status)}</td>
+      <td class="mono-text" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text3)">${h.reason}</td>
+      <td class="mono-text">${h.time}</td>
+    </tr>`).join('');
+}
+
+function clearSyscallHistory() {
+  syscallHistory = [];
+  callCounter    = 0;
+  renderSyscallHistory();
+  const out = document.getElementById('terminal-output');
+  if (out) {
+    out.innerHTML = '';
+    const username = localStorage.getItem('sg_username') || '—';
+    const role     = localStorage.getItem('sg_role')     || 'Guest';
+    terminalLine('SysCallGuardian v1.0 — System Call Mediation Terminal', 'dim');
+    terminalLine(`Authenticated as: ${username} (${role})`, 'dim');
+    terminalLine('────────────────────────────────────────', 'dim');
+  }
+  document.getElementById('last-result-card').style.display = 'none';
+  document.getElementById('history-count').textContent = '0 calls';
+}
+
+// ── Quick test scenarios ──────────────────────────────────
+function loadScenario(name) {
+  const scenarios = {
+    allowed_read: () => {
+      selectOp(document.querySelector('.op-btn[data-op="file_read"]'));
+      document.getElementById('input-filepath').value = 'test.txt';
+      updatePreview();
+    },
+    blocked_exec: () => {
+      selectOp(document.querySelector('.op-btn[data-op="exec_process"]'));
+      document.getElementById('input-command').value = '/bin/sh';
+      updatePreview();
+    },
+    path_traversal: () => {
+      selectOp(document.querySelector('.op-btn[data-op="file_read"]'));
+      document.getElementById('input-filepath').value = '../../etc/passwd';
+      updatePreview();
+    },
+    allowed_exec: () => {
+      selectOp(document.querySelector('.op-btn[data-op="exec_process"]'));
+      document.getElementById('input-command').value = 'dir';
+      updatePreview();
+    },
+    system_dir: () => {
+      selectOp(document.querySelector('.op-btn[data-op="dir_list"]'));
+      document.getElementById('input-filepath').value = '/sys/kernel';
+      updatePreview();
+    },
+  };
+  scenarios[name]?.();
+  showToast('success', 'Scenario loaded — click Execute to run');
+}
+
+// goPage is already defined in ui.js and already calls initSyscallPage().
+// No override needed — removing this to prevent double-init.
+</script>
+
+</body>
+</html>
