@@ -232,7 +232,7 @@ def api_me():
 
 @user_bp.route("/api/user/roles", methods=["GET"])
 @require_auth
-@require_role("admin")
+@require_role("developer")
 def api_roles():
     return jsonify(get_all_roles()), 200
 
@@ -311,7 +311,7 @@ def api_update_policy(policy_id: int):
 
 @user_bp.route("/api/users", methods=["GET"])
 @require_auth
-@require_role("admin")
+@require_role("developer")
 def api_get_all_users():
     """
     GET /api/users
@@ -342,7 +342,7 @@ def api_get_all_users():
 
 @user_bp.route("/api/users/<int:user_id>/revoke", methods=["POST"])
 @require_auth
-@require_role("admin")
+@require_role("developer")
 def api_revoke_user_session(user_id: int):
     """
     POST /api/users/:id/revoke
@@ -365,7 +365,7 @@ def api_revoke_user_session(user_id: int):
 
 @user_bp.route("/api/users/<int:user_id>/unflag", methods=["POST"])
 @require_auth
-@require_role("admin")
+@require_role("developer")
 def api_unflag_user(user_id: int):
     """
     POST /api/users/:id/unflag
@@ -394,7 +394,7 @@ def api_unflag_user(user_id: int):
 
 @user_bp.route("/api/users/<int:user_id>/role", methods=["PUT"])
 @require_auth
-@require_role("admin")
+@require_role("developer")
 def api_change_user_role(user_id: int):
     """
     PUT /api/users/:id/role
@@ -410,13 +410,19 @@ def api_change_user_role(user_id: int):
     if user_id == g.user["user_id"]:
         return jsonify({"error": "You cannot change your own role."}), 400
 
+    creator_role = g.user.get("role", "guest")
+    if creator_role == "developer" and role != "guest":
+        return jsonify({"error": "Forbidden", "detail": "Developers can only assign Guest roles."}), 403
+
     conn = get_connection()
     try:
-        row = conn.execute(
-            "SELECT username FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
-        if not row:
+        current_data = conn.execute("SELECT username, role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not current_data:
             return jsonify({"error": f"User ID {user_id} not found."}), 404
+        
+        # Security: Developer cannot change an Admin's role
+        if creator_role == "developer" and current_data["role"] == "admin":
+            return jsonify({"error": "Forbidden", "detail": "Developers cannot modify Administrator accounts."}), 403
         conn.execute(
             "UPDATE users SET role = ? WHERE id = ?", (role, user_id)
         )
