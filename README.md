@@ -1,7 +1,6 @@
 # SysCallGuardian — Professional System Call Gateway
 
 ![Version](https://img.shields.io/badge/version-4.0.0--stable-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 
 **SysCallGuardian** is a high-performance, security-focused system call gateway designed to monitor, filter, and audit system-level operations in real-time. It provides a centralized dashboard for administrators to enforce granular security policies across a multi-user environment.
