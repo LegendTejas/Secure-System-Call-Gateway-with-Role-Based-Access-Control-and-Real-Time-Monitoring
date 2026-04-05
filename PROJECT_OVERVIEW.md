@@ -31,12 +31,14 @@ Full oversight of system health and security integrity.
 - **Dashboard**: Global real-time stats for *all* users and roles.
 - **Logs**: Access to every syscall recorded in the system.
 - **Management**: The only role capable of creating/toggling policies and managing risk thresholds.
+- **User Creation**: Can register any new user role (Admin, Developer, Guest).
 - **Integrity**: Permission to run SHA-256 chain verification for audit compliance.
 
 ### ⚙️ Developer (Operational User)
 Power users who need to run applications and debug activity.
 - **Dashboard**: Personal view showing their specific performance and syscall counts.
 - **Logs**: Can view general system activity for debugging, but sensitive paths (e.g., `/etc/shadow`, root directories) are automatically **redacted**.
+- **User Creation**: Can register new **Guest** accounts for trial or external access.
 - **Policies**: Read-only preview of active policies (helps in understanding why a script might be getting blocked).
 
 ### 👤 Guest (Restricted User)
@@ -50,6 +52,8 @@ Minimal footprint for external or trial accounts.
 ## 🔐 3. Authentication & Recovery Flow
 The authentication system is designed to be both secure and user-friendly, with specific recovery paths for different roles.
 
+- **Strict Managed Registration**: Public self-registration has been decommissioned. New users must be added by an authorized Admin or Developer via the "Add User" form in the secure dashboard.
+- **Developer Restrictions**: To prevent privilege escalation, Developers are strictly restricted to adding only **Guest** accounts.
 - **Strict Tab-Based Identity**: The login and recovery modals strictly respect the selected role tab (Admin, Dev, or Guest) to prevent role-spoofing during password reset.
 - **Guest Recovery**: Self-service via **Email OTP**. Guests can reset their passwords by verifying a 6-digit code sent to their registered email.
 - **Admin/Dev Recovery**: Strategic restriction. These roles must trigger a "Reset Request" that requires administrative approval, preventing automated takeovers of high-privilege accounts.
@@ -63,9 +67,9 @@ For testing and demonstration, the following accounts are pre-seeded in the syst
 | Role | Username | Password | Purpose |
 | :--- | :--- | :--- | :--- |
 | **Admin** | `Tejax` | `U@itej99x` | Security oversight & Policy management |
-| **Admin** | `Akael` | `Akhil9890` | Secondary security administrator |
 | **Developer** | `Vancika` | `Van112358` | Application development & Debugging |
-| **Guest** | *Any Email* | *Custom* | Restricted trial access |
+| **Guest A** | `GuestA` | `Guest@123` | Restricted trial access (Read-only) |
+| **Guest B** | `GuestB` | `Guest@456` | Restricted trial access (Read-only) |
 
 ---
 
@@ -78,6 +82,7 @@ Every entry in the `syscall_logs` table is cryptographically linked to the previ
 - **Risk Scoring**: Users start at 0. Every "Blocked" syscall or attempt to access sensitive system files increases their `risk_score`.
 - **Flagging**: Users exceeding a threshold (e.g., 70+) are automatically flagged in the UI for immediate investigation.
 - **Path Sanitization**: For non-admin roles, any syscall involving system-critical paths is redacted in the logs to prevent information leakage.
+- **CRT terminal AI**: The dashboard uses a CRT-style professional terminal look with status-aware log highlighting.
 
 ---
 
