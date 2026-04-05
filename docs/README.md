@@ -238,6 +238,7 @@ Full results saved to `performance/benchmark_results.json`.
 - Rules stored in DB, evaluated at runtime
 - Supports: `allow_roles`, `deny_roles`, `max_risk_score`, `time_range` conditions
 - Hot-reloadable — changes take effect immediately, no server restart
+- **Rule-set Management:** Bulk export/import all security policies as a JSON file for backups and environment sync.
 - Import rules from `policies/access_policy.json`
 
 ### Syscall Protection
@@ -283,9 +284,13 @@ Full results saved to `performance/benchmark_results.json`.
 | GET | /api/logs | Paginated audit logs |
 | GET | /api/logs/verify | Full chain verification |
 | GET | /api/logs/verify/:id | Single entry verification |
-| GET | /api/threats | Flagged users |
+| GET | /api/threats | Flagged users (aggregated) |
+| GET | /api/threats/events | Detailed threat event log (admin) |
 | GET | /api/dashboard/stats | Syscall statistics |
 | GET | /api/dashboard/activity | Hourly timeline |
+| GET | /api/policies/export | Download full rule-set (admin) |
+| POST | /api/policies/import | Bulk rule-set update (admin) |
+| POST | /api/syscall/system_info| Fetch system metadata |
 
 Full documentation: `docs/api_documentation.md`
 

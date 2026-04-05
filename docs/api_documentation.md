@@ -325,7 +325,31 @@ Authorization: Bearer <token>
 
 ---
 
-### 12. Update Policy
+### 12. Preview Active Policies (Developer Filter)
+**GET** `/api/policies/preview`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `developer` role or higher. 
+> Returns a filtered, read-only list of **active** policy names and IDs. This helps developers understand why certain system calls are being blocked without exposing sensitive rule JSON internals.
+
+**Response `200`:**
+```json
+[
+  {
+    "id": 1,
+    "name": "block_guest_exec",
+    "is_active": true
+  }
+]
+```
+
+---
+
+### 13. Update Policy
 **PUT** `/api/policies/:id`
 
 **Headers:**
@@ -356,6 +380,82 @@ Authorization: Bearer <token>
 **Errors:**
 - `400` — No fields provided, invalid rule
 - `404` — Policy not found
+
+---
+
+### 14. Delete Policy
+**DELETE** `/api/policies/:id`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `admin` role. Permanently removes a policy from the gateway database.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "message": "Policy deleted."
+}
+```
+
+---
+
+### 15. Export Rule-set
+**GET** `/api/policies/export`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `admin` role. Downloads the entire security policy set as a JSON list. Ideal for backups and multi-environment synchronization.
+
+**Response `200`:**
+```json
+[
+  {
+    "id": 1,
+    "name": "block_guest_exec",
+    "rule_json": "{...}",
+    "is_active": 1,
+    "updated_at": "..."
+  }
+]
+```
+
+---
+
+### 16. Import Rule-set
+**POST** `/api/policies/import`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `admin` role. Uploads a JSON rule-set to update or restore policies in bulk.
+> **Logic:** `INSERT OR REPLACE` — existing policies with the same name will be updated.
+
+**Request Body:**
+```json
+[
+  {
+    "name": "restrict_system_dirs",
+    "rule_json": "...",
+    "is_active": 1
+  }
+]
+```
+
+**Response `200`:**
+```json
+{
+  "message": "Successfully imported 5 security policies."
+}
+```
 
 ---
 
@@ -461,6 +561,31 @@ Authorization: Bearer <token>
 ```
 
 > Allowed commands: `ls`, `pwd`, `whoami`, `echo`, `cat`, `head`, `tail`, `python3`, `python`, `node`, `java`, `grep`, `find`, `mkdir`, `touch`, `cp`, `mv`, `wc`, `sort`, `uniq`
+
+---
+
+### 21. System Information
+**POST** `/api/syscall/system_info`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `guest` role or higher. Returns system-level metadata like OS version, CPU count, and memory stats.
+
+**Response `200`:**
+```json
+{
+  "status": "allowed",
+  "data": {
+    "os": "Windows-10-10.0.19045-SP0",
+    "cpu_count": 8,
+    "memory_mb": 16384,
+    "node_name": "GATEWAY-01"
+  }
+}
+```
 
 ---
 
@@ -604,6 +729,30 @@ Authorization: Bearer <token>
 | 20 – 39 | medium |
 | 40 – 69 | high |
 | 70 – 100 | critical |
+
+---
+
+### 26. Get Threat Events (Chronological Log)
+**GET** `/api/threats/events`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+> 🔒 Requires `admin` role. Returns a granular, event-level log of every threat detection. Unlike `/api/threats`, which groups by user, this endpoint shows each unique security violation as it occurred.
+
+**Response `200`:**
+```json
+[
+  {
+    "timestamp": "2026-04-06T01:47:00",
+    "user": "johndoe",
+    "event": "Blocked file_read probe",
+    "risk_score": 85.0
+  }
+]
+```
 
 ---
 
