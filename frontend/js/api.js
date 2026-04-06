@@ -77,3 +77,4 @@ const apiVerifyLogEntry = (id) => api('GET', `/api/logs/verify/${id}`);
 const apiRevokeSession  = (uid) => api('POST', `/api/users/${uid}/revoke`);
 const apiUnflagUser     = (uid) => api('POST', `/api/users/${uid}/unflag`);
 const apiUpdateRole     = (uid, role) => api('PUT', `/api/users/${uid}/role`, { role });
+const apiDeleteUser     = (uid) => api('DELETE', `/api/users/${uid}`);

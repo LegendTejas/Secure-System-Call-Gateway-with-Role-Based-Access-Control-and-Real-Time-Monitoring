@@ -231,8 +231,10 @@ function renderTimelineMarkers(logs) {
       data: points,
       backgroundColor: colors[i],
       borderColor: colors[i],
-      pointRadius: 5,
-      pointHoverRadius: 8,
+      pointRadius: 6,
+      pointHoverRadius: 9,
+      pointBorderWidth: 1,
+      pointBorderColor: '#FFFFFF',
       showLine: false
     };
   });

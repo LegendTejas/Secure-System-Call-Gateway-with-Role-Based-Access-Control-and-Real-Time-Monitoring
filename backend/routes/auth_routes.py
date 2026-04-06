@@ -467,10 +467,44 @@ def api_change_user_role(user_id: int):
             "UPDATE users SET role = ? WHERE id = ?", (role, user_id)
         )
         conn.commit()
-        return jsonify({
-            "message":  f"Role updated to '{role}' for user '{row['username']}'.",
+        return {
+            "message":  f"Role updated to '{role}' for user '{current_data['username']}'.",
             "user_id":  user_id,
             "new_role": role,
+        }, 200
+    finally:
+        conn.close()
+
+
+@user_bp.route("/api/users/<int:user_id>", methods=["DELETE"])
+@require_auth
+@require_role("admin")
+def api_delete_user(user_id: int):
+    """
+    DELETE /api/users/:id
+    Permanently delete a user and all associated forensic logs/sessions.
+    Admin only. Cannot delete self.
+    """
+    if user_id == g.user["user_id"]:
+        return jsonify({"error": "Forbidden", "detail": "You cannot delete your own administrative account."}), 403
+
+    conn = get_connection()
+    try:
+        user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            return jsonify({"error": f"User ID {user_id} not found."}), 404
+
+        # Delete associated data first (sessions and logs)
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM syscall_logs WHERE user_id = ?", (user_id,))
+        
+        # Finally delete the user
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+
+        return jsonify({
+            "message":  f"User '{user['username']}' and all associated forensic data permanently deleted.",
+            "user_id":  user_id
         }), 200
     finally:
         conn.close()

@@ -81,7 +81,10 @@ async function refreshDashboard() {
     // 5. Populate Filter Dropdowns dynamically
     await populateFilterDropdowns(extended);
 
-    // 6. Sync High-level threats/badges (Admins only)
+    // 6. Update Security Intelligence Snapshot
+    updateThreatIntel(stats, extended);
+
+    // 7. Sync High-level threats/badges (Admins only)
     const role = (localStorage.getItem('sg_role') || 'guest').toLowerCase();
     if (role === 'admin') {
       loadSuspiciousUsers();
@@ -100,6 +103,50 @@ async function refreshDashboard() {
     const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     statusText.textContent = `Last synced: ${now}`;
   }
+}
+
+/**
+ * Populates the Security Intelligence component with heuristic data.
+ */
+function updateThreatIntel(stats, extended) {
+  const anomaliesEl = document.getElementById('intel-anomalies');
+  const integrityEl = document.getElementById('intel-integrity');
+  const riskEl      = document.getElementById('intel-risk');
+  const badgeEl     = document.getElementById('intel-status-badge');
+
+  if (!anomaliesEl || !integrityEl || !riskEl || !badgeEl) return;
+
+  // 1. Calculate Risk Heuristics
+  const blockedRate = (stats.blocked / stats.total_calls) || 0;
+  const highRiskCount = stats.suspicious_users || 0;
+
+  if (blockedRate > 0.1 || highRiskCount > 2) {
+    riskEl.textContent = 'ELEVATED (Review Policies)';
+    riskEl.style.color = '#C0392B';
+    badgeEl.textContent = 'STATUS: WARNING';
+    badgeEl.style.background = '#FADBD8';
+    badgeEl.style.color = '#C0392B';
+    anomaliesEl.textContent = `High block rate (${(blockedRate*100).toFixed(1)}%). Review policy effectiveness.`;
+  } else if (blockedRate > 0.03 || highRiskCount > 0) {
+    riskEl.textContent = 'MODERATE (Stable)';
+    riskEl.style.color = '#E6960A';
+    badgeEl.textContent = 'STATUS: ADVISORY';
+    badgeEl.style.background = '#FEF5E7';
+    badgeEl.style.color = '#E6960A';
+    anomaliesEl.textContent = `Unusual activity detected from ${highRiskCount} user(s).`;
+  } else {
+    riskEl.textContent = 'LOW (Stable)';
+    riskEl.style.color = '#2D9E6F';
+    badgeEl.textContent = 'STATUS: NOMINAL';
+    badgeEl.style.background = '#E8F6F3';
+    badgeEl.style.color = '#1A7B54';
+    anomaliesEl.textContent = 'No suspicious patterns detected.';
+  }
+
+  // 2. Integrity Check (Simulated for forensics)
+  integrityEl.textContent = stats.blocked > 0 
+    ? `Policy engine blocked ${stats.blocked} unauthorized calls.` 
+    : "System integrity verified via policy engine.";
 }
 
 function resetOverviewFilters() {

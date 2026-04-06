@@ -92,6 +92,11 @@ window.loadUsersPage = async function() {
             </div>
           </div>
         </div>
+        ${(role === 'admin' && u.username !== localStorage.getItem('sg_username')) ? `
+          <button class="delete-user-btn" title="Delete User" onclick="event.stopPropagation(); deleteUser(${u.id}, '${u.username}')">
+            🗑️
+          </button>
+        ` : ''}
         <div class="user-card-stats">
           <div class="user-stat">
             <div class="user-stat-label">Syscalls</div>
@@ -346,5 +351,24 @@ window.doAdminRegister = async function() {
     await loadUsersPage();
   } catch (err) {
     if (errEl) errEl.textContent = '✗ Network error occurred.';
+  }
+};
+
+/**
+ * Permanently deletes a user from the forensic gateway.
+ */
+window.deleteUser = async function(id, username) {
+  if (!confirm(`⚠ CRITICAL ACTION: Are you sure you want to PERMANENTLY delete user '${username}' and all associated forensic data? This cannot be undone.`)) {
+    return;
+  }
+
+  showToast('info', `Deleting user '${username}'…`);
+  const result = await apiDeleteUser(id);
+
+  if (result.ok) {
+    showToast('success', `User '${username}' has been expunged from the gateway.`);
+    await loadUsersPage();
+  } else {
+    showToast('danger', `Failed to delete user: ${result.data?.error || 'Access Denied'}`);
   }
 };
