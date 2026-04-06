@@ -436,7 +436,27 @@
                   <label>Data to Write</label>
                   <textarea id="input-writedata" rows="3" placeholder="Content to write to file…"
                     style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);outline:none;resize:vertical;"
-                    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+                    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+                    oninput="updatePreview()"></textarea>
+
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                    <div>
+                      <label style="font-size: 10px; color: var(--text3); text-transform: uppercase;">Write Mode</label>
+                      <select id="input-writemode" class="filter-select" style="width:100%; height:38px; font-size:12px;" 
+                        onchange="toggleOffsetField(); updatePreview();">
+                        <option value="truncate">Clear & Write (O_TRUNC)</option>
+                        <option value="append">Append to End (O_APPEND)</option>
+                        <option value="overwrite">Overwrite from Start</option>
+                        <option value="offset">Overwrite at Offset (lseek)</option>
+                      </select>
+                    </div>
+                    <div id="field-writeoffset" style="display:none;">
+                      <label style="font-size: 10px; color: var(--text3); text-transform: uppercase;">Offset (Bytes)</label>
+                      <input type="number" id="input-writeoffset" value="0" min="0" 
+                        style="width:100%; height:38px; padding: 0 12px; border: 1.5px solid var(--border); border-radius: var(--radius); font-family: var(--mono); font-size: 12px; background: var(--surface); color: var(--text); outline: none;"
+                        oninput="updatePreview()">
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -462,6 +482,21 @@
               <button id="exec-btn" class="btn primary" style="width:100%;justify-content:center;padding:12px;" onclick="executeSyscall()">
                 Execute →
               </button>
+            </div>
+
+            <!-- [NEW] File Explorer -->
+            <div class="explorer-card">
+              <div class="explorer-header">
+                <div class="card-title" style="font-size:13px;">File Explorer</div>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn sm" onclick="renderExplorer()" title="Refresh Explorer">🔄</button>
+                  <button class="btn sm primary" onclick="document.getElementById('external-import-input').click()" title="Import External .txt">↑ Import</button>
+                  <input type="file" id="external-import-input" style="display:none" accept=".txt" onchange="importExternalFile(this)">
+                </div>
+              </div>
+              <div id="explorer-list" class="explorer-list">
+                <div class="explorer-empty">Loading sandbox files…</div>
+              </div>
             </div>
 
             <!-- Quick test scenarios -->
@@ -841,6 +876,14 @@ function selectOp(el) {
   updatePreview();
 }
 
+function toggleOffsetField() {
+  const mode = document.getElementById('input-writemode')?.value;
+  const offsetField = document.getElementById('field-writeoffset');
+  if (offsetField) {
+    offsetField.style.display = mode === 'offset' ? 'block' : 'none';
+  }
+}
+
 function updatePreview() {
   const previewEl  = document.getElementById('preview-text');
   const endpointEl = document.getElementById('cmd-preview');
@@ -856,7 +899,13 @@ function updatePreview() {
   } else if (currentOp === 'file_write') {
     const fp   = document.getElementById('input-filepath')?.value  || '';
     const data = document.getElementById('input-writedata')?.value || '';
-    previewEl.textContent = `{ "file_path": "${fp}", "data": "…" }`;
+    const mode = document.getElementById('input-writemode')?.value || 'truncate';
+    if (mode === 'offset') {
+      const off = document.getElementById('input-writeoffset')?.value || 0;
+      previewEl.textContent = `{ "file_path": "${fp}", "mode": "${mode}", "offset": ${off}, "data": "…" }`;
+    } else {
+      previewEl.textContent = `{ "file_path": "${fp}", "mode": "${mode}", "data": "…" }`;
+    }
   } else {
     const fp = document.getElementById('input-filepath')?.value || '';
     previewEl.textContent = `{ "file_path": "${fp}" }`;
@@ -903,8 +952,13 @@ async function executeSyscall() {
     if (!fp) { terminalLine('⚠ Enter a file path first.', 'blocked'); return; }
     body = { file_path: fp };
     displayTarget = fp;
+    displayTarget = fp;
     if (currentOp === 'file_write') {
       body.data = document.getElementById('input-writedata')?.value || '';
+      body.mode = document.getElementById('input-writemode')?.value || 'truncate';
+      if (body.mode === 'offset') {
+        body.offset = parseInt(document.getElementById('input-writeoffset')?.value || '0');
+      }
     }
   }
 
@@ -975,6 +1029,11 @@ async function executeSyscall() {
   callCounter++;
   syscallHistory.unshift({ n: callCounter, op: currentOp, target: displayTarget, status, reason: data.reason || '—', time: ts });
   renderSyscallHistory();
+
+  // Refresh explorer on file changes
+  if (status === 'allowed' && ['file_write', 'file_delete'].includes(currentOp)) {
+    renderExplorer();
+  }
 }
 
 
