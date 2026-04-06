@@ -61,5 +61,19 @@ const apiVerifyLogs = () => api('GET', '/api/logs/verify');
 
 // Policies Advanced
 const apiExportPolicies = () => api('GET', '/api/policies/export');
-const apiImportPolicies = (data) => api('POST', '/api/policies/import', data);
-const apiDeletePolicy  = (id) => api('DELETE', `/api/policies/${id}`);
+const apiImportPolicies  = (data) => api('POST', '/api/policies/import', data);
+const apiDeletePolicy   = (id) => api('DELETE', `/api/policies/${id}`);
+
+// Syscall Utilities
+const apiGetExplorer    = () => api('GET', '/api/syscall/explorer');
+const apiGetUsers       = () => api('GET', '/api/users');
+const apiWriteFile      = (path, data) => api('POST', '/api/syscall/write', { file_path: path, data });
+const apiReadFile       = (path) => api('POST', '/api/syscall/read', { file_path: path });
+const apiDeleteFile     = (path) => api('POST', '/api/syscall/delete', { file_path: path });
+const apiDirList        = (path) => api('POST', '/api/syscall/dir_list', { file_path: path });
+const apiExecProcess    = (cmd) => api('POST', '/api/syscall/execute', { command: cmd });
+const apiGetSystemInfo  = () => api('POST', '/api/syscall/system_info');
+const apiVerifyLogEntry = (id) => api('GET', `/api/logs/verify/${id}`);
+const apiRevokeSession  = (uid) => api('POST', `/api/users/${uid}/revoke`);
+const apiUnflagUser     = (uid) => api('POST', `/api/users/${uid}/unflag`);
+const apiUpdateRole     = (uid, role) => api('PUT', `/api/users/${uid}/role`, { role });
