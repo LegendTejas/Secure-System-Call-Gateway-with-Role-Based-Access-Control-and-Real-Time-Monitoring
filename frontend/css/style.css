@@ -107,11 +107,29 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 .role-btn.active { border-color: var(--accent-mid); background: rgba(45, 158, 111, 0.2); }
 .role-btn.active .role-label { color: #FFFFFF; font-weight: 600; }
 
+#login-view .form-group { margin-bottom: 16px; }
+#login-view .form-group label { display: block; font-size: 11px; font-weight: 600; color: #FFFFFF; margin-bottom: 8px; letter-spacing: 0.8px; text-transform: uppercase; font-family: var(--mono); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+#login-view .form-group input { width: 100%; padding: 11px 14px; border: 1.5px solid rgba(255,255,255,0.15); border-radius: var(--radius); font-family: var(--sans); font-size: 14px; color: #FFFFFF; background: rgba(255,255,255,0.08); outline: none; transition: all 0.15s; }
+#login-view .form-group input:focus { border-color: var(--accent-mid); background: rgba(255,255,255,0.15); box-shadow: 0 0 0 3px rgba(45,158,111,0.2); }
+#login-view .form-group input::placeholder { color: rgba(255,255,255,0.5); }
+
+/* Global Form Groups (Dashboard) */
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 11px; font-weight: 600; color: #FFFFFF; margin-bottom: 8px; letter-spacing: 0.8px; text-transform: uppercase; font-family: var(--mono); text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-.form-group input { width: 100%; padding: 11px 14px; border: 1.5px solid rgba(255,255,255,0.15); border-radius: var(--radius); font-family: var(--sans); font-size: 14px; color: #FFFFFF; background: rgba(255,255,255,0.08); outline: none; transition: all 0.15s; }
-.form-group input:focus { border-color: var(--accent-mid); background: rgba(255,255,255,0.15); box-shadow: 0 0 0 3px rgba(45,158,111,0.2); }
-.form-group input::placeholder { color: rgba(255,255,255,0.5); }
+.form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; font-family: var(--mono); }
+.form-group input, .form-group select, .form-group textarea { 
+  width: 100%; 
+  padding: 10px 14px; 
+  border: 1.5px solid var(--border); 
+  border-radius: var(--radius); 
+  font-family: var(--sans); 
+  font-size: 13px; 
+  color: var(--text); 
+  background: var(--surface); 
+  outline: none; 
+  transition: border-color 0.15s, box-shadow 0.15s; 
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.form-group input::placeholder { color: var(--text3); }
 .input-row { position: relative; }
 .input-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.6); cursor: pointer; font-size: 14px; }
 .link-btn { background: none; border: none; font-size: 11px; font-family: var(--mono); color: #FFFFFF; cursor: pointer; transition: all 0.15s; text-decoration: underline; opacity: 0.8; }
