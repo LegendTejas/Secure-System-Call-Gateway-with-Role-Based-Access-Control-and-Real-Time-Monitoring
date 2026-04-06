@@ -91,7 +91,12 @@ def _dispatch(call_type: str, payload: dict) -> dict:
     if call_type == "file_read":
         return safe_file_read(payload.get("file_path", ""))
     elif call_type == "file_write":
-        return safe_file_write(payload.get("file_path", ""), payload.get("data", ""))
+        return safe_file_write(
+            payload.get("file_path", ""), 
+            payload.get("data", ""),
+            payload.get("mode", "truncate"),
+            payload.get("offset", 0)
+        )
     elif call_type == "file_delete":
         return safe_file_delete(payload.get("file_path", ""))
     elif call_type == "dir_list":
