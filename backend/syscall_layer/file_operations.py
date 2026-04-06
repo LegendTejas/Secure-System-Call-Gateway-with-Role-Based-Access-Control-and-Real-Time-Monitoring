@@ -46,9 +46,10 @@ def safe_file_read(path: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def safe_file_write(path: str, data: str) -> dict:
+def safe_file_write(path: str, data: str, mode: str = "truncate", offset: int = 0) -> dict:
     """
-    Write data to a file safely.
+    Write data to a file safely with advanced control.
+    Modes: truncate (w), append (a), overwrite (r+ at 0), offset (r+ at offset)
     Returns: { success, message } or { success: False, error }
     """
     path_validation = validate_file_path(path)
@@ -63,9 +64,27 @@ def safe_file_write(path: str, data: str) -> dict:
 
     try:
         os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
-        with open(resolved, "w", encoding="utf-8") as f:
+        
+        # Ensure file exists for r+ mode
+        if mode in ("overwrite", "offset") and not os.path.exists(resolved):
+            with open(resolved, "w", encoding="utf-8") as f:
+                pass
+
+        py_mode = "w"
+        if mode == "append":
+            py_mode = "a"
+        elif mode in ("overwrite", "offset"):
+            py_mode = "r+"
+
+        with open(resolved, py_mode, encoding="utf-8") as f:
+            if mode == "offset":
+                f.seek(offset)
+            elif mode == "overwrite":
+                f.seek(0)
+            
             f.write(data)
-        return {"success": True, "message": "Write successful"}
+
+        return {"success": True, "message": f"Write ({mode}) successful"}
 
     except PermissionError:
         return {"success": False, "error": f"Permission denied: {path}"}
