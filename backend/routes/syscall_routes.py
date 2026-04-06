@@ -62,6 +62,16 @@ def api_dir_list():
     return jsonify(result), code
 
 
+@syscall_bp.route("/api/syscall/explorer", methods=["GET"])
+@require_auth
+def api_explorer():
+    """Specific explorer endpoint that defaults to the sandbox root."""
+    # Reuse dir_list logic but with fixed root path "."
+    result = handle_syscall("dir_list", _get_user_with_risk(g.user), {"file_path": "."})
+    code = 200 if result["status"] == "allowed" else 403
+    return jsonify(result), code
+
+
 @syscall_bp.route("/api/syscall/execute", methods=["POST"])
 @require_auth
 def api_exec_process():
