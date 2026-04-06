@@ -198,31 +198,42 @@ function renderRiskBars(data) {
 }
 
 /* ── LINE: SYSCALL TIMELINE (CUMULATIVE) ── */
+/* ── FORENSIC SCATTER STREAM: CHRONOLOGICAL EVENTS ── */
 function renderTimelineMarkers(logs) {
   const ctx = document.getElementById('timelineChart')?.getContext('2d');
-  if (!ctx) return;
+  if (!ctx || !logs) return;
 
-  // Sort logs by timestamp ascending for cumulative logic
-  const sortedLogs = [...logs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const SYSCALL_MAP = ['file_read', 'file_write', 'file_delete', 'dir_list', 'exec_process', 'system_info'];
   
+  // Create status-grouped datasets
   const statuses = ['allowed', 'blocked', 'flagged'];
   const datasets = statuses.map((st, i) => {
-    let count = 0;
-    const data = sortedLogs.map(l => {
-      if (l.status === st) count++;
-      return { x: new Date(l.timestamp).getTime(), y: count };
-    });
+    // Filter and map logs to scatter points { x: time, y: categorical_index }
+    const points = logs
+      .filter(l => l.status === st)
+      .map(l => {
+        let yIdx = SYSCALL_MAP.indexOf(l.call_type);
+        if (yIdx === -1) yIdx = SYSCALL_MAP.length; // fallback
+        return {
+          x: new Date(l.timestamp).getTime(),
+          y: yIdx,
+          // Attach raw data for tooltip
+          user: l.user,
+          path: l.target_path || '—',
+          call: l.call_type,
+          timeStr: new Date(l.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        };
+      });
 
     const colors = [COLORS.green, COLORS.red, COLORS.amber];
     return {
       label: st.charAt(0).toUpperCase() + st.slice(1),
-      data: data,
+      data: points,
+      backgroundColor: colors[i],
       borderColor: colors[i],
-      backgroundColor: colors[i] + '15', // subtle fill
-      fill: true,
-      stepped: true, // Step chart looks better for discrete event growth
-      pointRadius: 0,
-      borderWidth: 2
+      pointRadius: 5,
+      pointHoverRadius: 8,
+      showLine: false
     };
   });
 
@@ -231,28 +242,61 @@ function renderTimelineMarkers(logs) {
     timelineChartObj.update();
   } else {
     timelineChartObj = new Chart(ctx, {
-      type: 'line',
+      type: 'scatter',
       data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        layout: { padding: { left: 10, right: 20, top: 10, bottom: 0 } },
         scales: {
           x: { 
             type: 'linear', 
-            position: 'bottom', 
-            grid: { color: COLORS.border },
-            ticks: { 
-               display: false // keep it clean like the scatter was
+            grid: { color: COLORS.border, borderDash: [2, 2] },
+            title: { display: true, text: 'Time Sequence', font: { family: 'JetBrains Mono', size: 10 }, color: COLORS.text3 },
+            ticks: {
+              font: { family: 'JetBrains Mono', size: 9 },
+              color: COLORS.text3,
+              maxRotation: 0,
+              callback: function(val) {
+                return new Date(val).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+              }
             }
           },
           y: { 
-            beginAtZero: true,
+            min: -0.5,
+            max: SYSCALL_MAP.length - 0.5,
             grid: { color: COLORS.border },
-            ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: COLORS.text3 }
+            title: { display: true, text: 'System Call Type', font: { family: 'JetBrains Mono', size: 10 }, color: COLORS.text3 },
+            ticks: {
+              stepSize: 1,
+              font: { family: 'JetBrains Mono', size: 9, weight: '500' },
+              color: COLORS.text2,
+              callback: function(val) {
+                return SYSCALL_MAP[val] || '';
+              }
+            }
           }
         },
         plugins: { 
-          legend: { position: 'top', labels: { boxWidth: 8, font: { size: 10 } } },
-          tooltip: { mode: 'index', intersect: false }
+          legend: { position: 'top', align: 'end', labels: { boxWidth: 8, font: { size: 10, family: 'DM Sans' } } },
+          tooltip: {
+            backgroundColor: 'rgba(15, 45, 31, 0.95)',
+            titleFont: { family: 'JetBrains Mono', size: 12 },
+            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: function(context) {
+                const p = context.raw;
+                return [
+                  ` User:   ${p.user}`,
+                  ` Call:   ${p.call}`,
+                  ` Path:   ${p.path}`,
+                  ` Time:   ${p.timeStr}`,
+                  ` Status: ${context.dataset.label}`
+                ];
+              }
+            }
+          }
         }
       }
     });
