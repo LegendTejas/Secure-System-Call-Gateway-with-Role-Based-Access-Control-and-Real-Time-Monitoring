@@ -1,80 +1,146 @@
-# PROJECT_OVERVIEW.md: SysCallGuardian Forensic Gateway
+# SysCallGuardian: Deep-Dive Technical Manual
 
-**Technical Depth · Multi-Layered Security Architecture · Forensic Governance**
+**Substantive Architecture · Cryptographic Integrity Chain · Heuristic Threat Governance**
 
-SysCallGuardian is a sophisticated, mediated system call gateway designed for high-security environments. It acts as an isolation layer between administrative/operation users and critical host operations, ensuring every syscall is validated against granular role-based policies and forensic integrity chains.
-
----
-
-## 🏛️ System Architecture
-
-The SysCallGuardian architecture is built on a **Triple-Layer Lockdown** model:
-
-1. **Authentication & RBAC Layer**: Enforces identity-based access control. No operation is permitted without a valid session token (SHA-256 backed).
-2. **Mediation Layer (Policy Engine)**: Every syscall (`file_read`, `file_write`, `file_delete`, `dir_list`, `exec_process`, `system_info`) is intercepted and evaluated against the **Security Policy JSON**.
-3. **Forensic Audit Layer**: Every transaction—both allowed and blocked—is committed to a forensic log protected by a **Chain-of-Trust HMAC signature**.
+SysCallGuardian is a high-fidelity forensic system call gateway designed to mediate, audit, and secure system-level operations. This manual provides an exhaustive breakdown of the system's logic, security protocols, and forensic infrastructure.
 
 ---
 
-## 🛡️ Security Protocols & RBAC
+## 🏛️ 1. Architectural Blueprint
 
-### Role-Based Access Control (RBAC)
-SysCallGuardian enforces three distinct security personas:
-- **Administrator**: Full system lifecycle management (User Admin, Policy Import/Export, Forensic Verification).
-- **Developer**: Mediated system access (File read/write/list) with path sanitization and forensic logging.
-- **Guest**: Restricted, read-only observer status with access to personal logs only.
+SysCallGuardian operates as an interceptor between the User/Application and the Operating System. Every request follows a strict **Triple-Lock Forensic Lifecycle**:
 
-### Custom Security Policies
-Mediation is governed by a persistent rule-set (`policies.json`) that defines:
-- **Call Targets**: Specific file paths or restricted system commands.
-- **Role Permissions**: Which roles are permitted to target which resources.
-- **Exception Rules**: Granular overrides for critical security scenarios.
+```mermaid
+sequenceDiagram
+    participant U as User/Frontend
+    participant A as Auth Middleware
+    participant M as Mediation (Policy Engine)
+    participant F as Forensic Auditor (HMAC)
+    participant OS as Operating System
 
----
-
-## 🔍 Forensic Integrity & HMAC
-
-To prevent attackers from erasing their traces after a compromise, SysCallGuardian implements a **Chain-of-Trust Forensic Audit**:
-1. **Transaction Hashing**: Each log entry is hashed with its predecessor's signature using a secret HMAC key.
-2. **Integrity Verification**: Admins can run a **Full Chain Audit** to detect any manual log tampering or missing entries.
-3. **Immutability Principle**: The forensic log is treated as an append-only source of truth, isolation from standard user modify operations.
-
----
-
-## 🧠 Heuristic Threat Intelligence
-
-SysCallGuardian's **Threat Intel Engine** provides real-time security observability:
-- **Heuristic Risk Scoring**: Users are assigned a dynamic risk score (0-100) based on their interaction patterns and block rates.
-- **Threshold Alerts**: If a user's risk exceeds a critical threshold (e.g., 80+), their account is flagged for forensic review.
-- **Threat Event Distribution**: Real-time categorization of security events into `Audit`, `Warning`, and `Critical` indicators.
+    U->>A: POST /api/syscall/write
+    A->>A: Verify JWT-Equivalent Session
+    A->>M: Forward Request (User + Payload)
+    M->>M: Validate Path (Regex) & Role (Policy)
+    M->>F: Log Decision (Allowed/Blocked)
+    F->>F: Sign Entry + Chain to Prev Hash
+    alt Allowed
+        F->>OS: Execute Native Syscall
+        OS->>U: Success Response (Forensic Hash ID)
+    else Blocked
+        F->>U: 403 Forbidden (Violation Log ID)
+    end
+```
 
 ---
 
-## 📊 Analytics & Forensic Visualization
+## 🛡️ 2. Security Mediation Layer
 
-The **Security Operations Center (SOC)** dashboard features:
-- **Forensic Scatter Stream**: A chronological visualization of system calls, mapped by decision (Allowed vs. Blocked).
-- **Metric Micro-Distributions**: Real-time charts showing system call volume, role distribution, and block rates.
-- **Live Intelligence Snapshot**: Categorized counters for active threats, flagged users, and forensic node status.
+The Mediation Layer (`validation.py`) enforces strict isolation through three primary protection mechanisms:
+
+### A. Path Sanitization & Blocklist
+System-critical paths are strictly unreachable regardless of user role:
+- **Restricted Directories**: `/etc/passwd`, `/etc/shadow`, `/proc`, `/sys/kernel`, `/dev`, `/boot`, `/root`.
+- **Normalization**: Every path is normalized (`os.path.normpath`) to prevent bypasses via `./` or `//`.
+
+### B. Command Whitelist (exec_process)
+Only a curated list of non-destructive diagnostic tools is permitted:
+- **Utilities**: `ls`, `pwd`, `whoami`, `echo`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `uniq`.
+- **Sandbox**: `python3`, `node`, `java`.
+- **Diagnostic**: `hostname`, `ipconfig`, `netstat`.
+
+### C. Injection Protection (Regex)
+All command strings and paths are scanned for high-risk shell patterns:
+- `; \s*rm \s` (Chained deletions)
+- `\|\s*sh` (Piping to shell)
+- `>\s*/etc` (Unauthorized redirects)
+- `\.\.\/` (Advanced path traversal)
+- `$( ... )` and `` `...` `` (Command substitution)
 
 ---
 
-## 🛰️ API Reference (High-Level)
+## 🔍 3. Forensic Chain-of-Trust (HMAC)
 
-### 1. Authentication
-- `POST /api/auth/login`: Identity verification and session issuance.
-- `POST /api/auth/register`: (Admin Only) Forensic user provisioning.
+To protect the audit log from post-compromise tampering, SysCallGuardian implements a cryptographic **Chain-of-Trust**.
 
-### 2. Syscall Mediation
-- `POST /api/syscall/read`: Mediated file read with path validation.
-- `POST /api/syscall/write`: Multi-mode file write (Append, Overwrite, Offset).
-- `POST /api/syscall/execute`: Restricted process execution via allowlist.
+### The Hashing Flow
+Each log entry is hashed using SHA-256 by combining its own metadata with the hash of the *previous* entry (`prev_hash`).
 
-### 3. Forensic & Threat Data
-- `GET /api/logs`: Query-driven forensic audit stream.
-- `GET /api/logs/verify`: (Admin Only) Full cryptographic chain-of-trust audit.
-- `GET /api/threats/events`: Chronological list of heuristic threat indicators.
+```python
+# audit_logger.py Logic Pattern
+def _hash_entry(data, prev_hash):
+    payload = json.dumps({
+        **data,
+        "prev_hash": prev_hash
+    }, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()
+```
+
+### Forensic Integrity Verification
+Administrators can run a **Full Chain Audit**. The verification engine reconstructs every hash in the chain. If any bit of a 1,000-entry log was modified, the chain breaks at that ID, flagging the entry as **TAMPERED**.
+
+---
+
+## 🧠 4. Heuristic Threat Intelligence
+
+The Threat Intel Engine monitors real-time forensic streams to assign dynamic **Risk Scores (0-100)** to users.
+
+| Rule ID | Name | Trigger Condition | Severity |
+| :--- | :--- | :--- | :--- |
+| **R2** | Syscall Flood | 5+ calls of same type in 60s | **High** |
+| **R3** | Exec Violation | 1+ blocked `exec_process` attempts | **Critical** |
+| **R4** | Path Probe | Access attempts to `/sys`, `/proc`, `/root` | **High** |
+| **R5** | Threshold | Cumulative risk score ≥ 70 | **Critical** |
+
+### Risk Categorization
+- **0-20 (Low)**: Normal operational usage.
+- **20-40 (Medium)**: Occasional errors or unusual path queries.
+- **40-70 (High)**: Repeated violations; automatic dashboard flagging.
+- **70-100 (Critical)**: Active threat suspected; forensic isolation recommended.
+
+---
+
+## 💾 5. Data Infrastructure (SQL Schema)
+
+### Table: `users`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Unique User Identifier |
+| `username` | TEXT (Unique) | Identity Handle |
+| `role` | TEXT | RBAC Role (guest, developer, admin) |
+| `risk_score` | REAL | Heuristic risk (0-100) |
+| `is_flagged` | INTEGER (0/1) | Alert status for SOC |
+
+### Table: `syscall_logs`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Log Sequence ID |
+| `user_id` | INTEGER (FK) | Reference to `users.id` |
+| `call_type` | TEXT | e.g. `file_read`, `exec_process` |
+| `target_path`| TEXT | Sanitized path or command |
+| `status` | TEXT | `allowed`, `blocked`, `flagged` |
+| `log_hash` | TEXT | Cryptographic entry signature |
+| `prev_hash` | TEXT | Chain link to previous entry |
+
+---
+
+## 🛰️ 6. API Manifest v1.0
+
+### Authentication & Management
+- `POST /api/auth/login`: Issue session tokens.
+- `PUT /api/users/:id/role`: (Admin) Update RBAC status.
+- `DELETE /api/users/:id`: (Admin) Forensic account removal (cascades to logs).
+
+### Forensic Operations
+- `GET /api/logs`: Query the forensic stream (sanitized for non-Admins).
+- `GET /api/logs/verify`: (Admin) Full cryptographic chain audit.
+- `GET /api/threats/events`: Live feed of heuristic detection events.
+
+### Syscall Gateway
+- `POST /api/syscall/read`: Mediated file retrieval.
+- `POST /api/syscall/write`: Multi-mode write (Append/Truncate/Offset).
+- `POST /api/syscall/execute`: Restricted subprocess execution.
 
 ---
 **SysCallGuardian — Forensic Stability, Cinematic Security.**
-JSON Security Policy Engine · HMAC-Protected Logs · Heuristic Intel Snapshot
+*Detailed Manual for v1.0 Final Release.*
