@@ -1,102 +1,80 @@
-# Project Overview: SysCallGuardian — System Call Gateway
+# PROJECT_OVERVIEW.md: SysCallGuardian Forensic Gateway
 
-This document provides a comprehensive summary of the architecture, features, and technical milestones of the **SysCallGuardian** project. SysCallGuardian is a multi-layered security gateway designed to intercept, analyze, and govern system calls in real-time with strict Role-Based Access Control (RBAC).
+**Technical Depth · Multi-Layered Security Architecture · Forensic Governance**
 
----
-
-## 🏗️ 1. System Architecture
-SysCallGuardian is built with a modular, security-first approach, separating sensitive kernel-level interception logic from the administrative dashboard.
-
-### 🔹 Backend (Python/Flask)
-- **Modular Services**:
-  - `auth_rbac`: Manages roles, permissions, and session security.
-  - `syscall_layer`: Intercepts and processes system call requests.
-  - `policy_engine`: Evaluates real-time rules for allowing/blocking activity.
-  - `logging_detection`: Handles cryptographic audit logs and threat scoring.
-- **Database**: SQLite persistence for users, session isolation, and immutable syscall logs.
-- **Security Protocols**: Bcrypt password hashing, SHA-256 log chaining, and OTP-based verification.
-
-### 🔹 Frontend (HTML5/Vanilla JS/Chart.js)
-- **Unified SPA**: A reactive single-page application with role-tailored views.
-- **Analytics Engine**: Native **Chart.js v4** integration for high-performance visualizations.
-- **Aesthetics**: Premium dark-mode interface with glassmorphism, dynamic animations, and responsive layouts.
+SysCallGuardian is a sophisticated, mediated system call gateway designed for high-security environments. It acts as an isolation layer between administrative/operation users and critical host operations, ensuring every syscall is validated against granular role-based policies and forensic integrity chains.
 
 ---
 
-## 🛡️ 2. Role-Based Access Control (RBAC)
-SysCallGuardian enforces the **Principle of Least Privilege**. Each role has a distinct accessibility profile tailored to its responsibilities.
+## 🏛️ System Architecture
 
-### 👑 Admin (Security Officer)
-Full oversight of system health and security integrity.
-- **Dashboard**: Global real-time stats for *all* users and roles.
-- **Logs**: Access to every syscall recorded in the system.
-- **Management**: The only role capable of creating/toggling policies and managing risk thresholds.
-- **User Creation**: Can register any new user role (Admin, Developer, Guest).
-- **Integrity**: Permission to run SHA-256 chain verification for audit compliance.
+The SysCallGuardian architecture is built on a **Triple-Layer Lockdown** model:
 
-### ⚙️ Developer (Operational User)
-Power users who need to run applications and debug activity.
-- **Dashboard**: Personal view showing their specific performance and syscall counts.
-- **Logs**: Can view general system activity for debugging, but sensitive paths (e.g., `/etc/shadow`, root directories) are automatically **redacted**.
-- **User Creation**: Can register new **Guest** accounts for trial or external access.
-- **Policies**: Read-only preview of active policies (helps in understanding why a script might be getting blocked).
-
-### 👤 Guest (Restricted User)
-Minimal footprint for external or trial accounts.
-- **Personal View**: A simplified dashboard showing only their own metrics (Allowed/Blocked counts).
-- **Restrictions**: Strictly limited to `file_read` and `dir_list`. No permission to execute processes or write to files.
-- **Privacy**: Cannot see other users' usernames, risk scores, or global traffic heatmaps.
+1. **Authentication & RBAC Layer**: Enforces identity-based access control. No operation is permitted without a valid session token (SHA-256 backed).
+2. **Mediation Layer (Policy Engine)**: Every syscall (`file_read`, `file_write`, `file_delete`, `dir_list`, `exec_process`, `system_info`) is intercepted and evaluated against the **Security Policy JSON**.
+3. **Forensic Audit Layer**: Every transaction—both allowed and blocked—is committed to a forensic log protected by a **Chain-of-Trust HMAC signature**.
 
 ---
 
-## 🔐 3. Authentication & Recovery Flow
-The authentication system is designed to be both secure and user-friendly, with specific recovery paths for different roles.
+## 🛡️ Security Protocols & RBAC
 
-- **Strict Managed Registration**: Public self-registration has been decommissioned. New users must be added by an authorized Admin or Developer via the "Add User" form in the secure dashboard.
-- **Developer Restrictions**: To prevent privilege escalation, Developers are strictly restricted to adding only **Guest** accounts.
-- **Strict Tab-Based Identity**: The login and recovery modals strictly respect the selected role tab (Admin, Dev, or Guest) to prevent role-spoofing during password reset.
-- **Guest Recovery**: Self-service via **Email OTP**. Guests can reset their passwords by verifying a 6-digit code sent to their registered email.
-- **Admin/Dev Recovery**: Strategic restriction. These roles must trigger a "Reset Request" that requires administrative approval, preventing automated takeovers of high-privilege accounts.
-- **Login Flexibility**: Supports authentication via both **Username** and **Email Address**.
+### Role-Based Access Control (RBAC)
+SysCallGuardian enforces three distinct security personas:
+- **Administrator**: Full system lifecycle management (User Admin, Policy Import/Export, Forensic Verification).
+- **Developer**: Mediated system access (File read/write/list) with path sanitization and forensic logging.
+- **Guest**: Restricted, read-only observer status with access to personal logs only.
 
----
-
-## 📋 4. Core User Personas
-For testing and demonstration, the following accounts are pre-seeded in the system:
-
-| Role | Username | Password | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `Tejax` | `U@itej99x` | Security oversight & Policy management |
-| **Developer** | `Vancika` | `Van112358` | Application development & Debugging |
-| **Guest A** | `GuestA` | `Guest@123` | Restricted trial access (Read-only) |
-| **Guest B** | `GuestB` | `Guest@456` | Restricted trial access (Read-only) |
+### Custom Security Policies
+Mediation is governed by a persistent rule-set (`policies.json`) that defines:
+- **Call Targets**: Specific file paths or restricted system commands.
+- **Role Permissions**: Which roles are permitted to target which resources.
+- **Exception Rules**: Granular overrides for critical security scenarios.
 
 ---
 
-## 🧪 5. Advanced Security Implementations
+## 🔍 Forensic Integrity & HMAC
 
-### ⛓️ SHA-256 Log Integrity Chain
-Every entry in the `syscall_logs` table is cryptographically linked to the previous one. If a single row is modified or deleted by an attacker, the entire chain "breaks," and the Admin is alerted during the next integrity check.
-
-### 🕵️ Real-time Threat Detection
-- **Risk Scoring**: Users start at 0. Every "Blocked" syscall or attempt to access sensitive system files increases their `risk_score`.
-- **Flagging**: Users exceeding a threshold (e.g., 70+) are automatically flagged in the UI for immediate investigation.
-- **Path Sanitization**: For non-admin roles, any syscall involving system-critical paths is redacted in the logs to prevent information leakage.
-- **CRT terminal AI**: The dashboard uses a CRT-style professional terminal look with status-aware log highlighting.
+To prevent attackers from erasing their traces after a compromise, SysCallGuardian implements a **Chain-of-Trust Forensic Audit**:
+1. **Transaction Hashing**: Each log entry is hashed with its predecessor's signature using a secret HMAC key.
+2. **Integrity Verification**: Admins can run a **Full Chain Audit** to detect any manual log tampering or missing entries.
+3. **Immutability Principle**: The forensic log is treated as an append-only source of truth, isolation from standard user modify operations.
 
 ---
 
-## 🚀 6. Project Roadmap
+## 🧠 Heuristic Threat Intelligence
 
-| Phase | Milestone | Focus | Status |
-| :--- | :--- | :--- | :--- |
-| **1.0** | Interception Layer | Core syscall logic | ✅ Done |
-| **2.0** | SQLite & Auth | RBAC Foundation | ✅ Done |
-| **3.0** | Analytics 1.0 | External Dash integration | ✅ Done |
-| **3.5** | Unified UI | Chart.js & SPA Migration | ✅ Done |
-| **4.0** | RBAC Maturity | Role-tailored dashboards & OTP | ✅ Done |
-| **5.0** | Advanced Policies | Rule-set export/import | 📝 Planned |
+SysCallGuardian's **Threat Intel Engine** provides real-time security observability:
+- **Heuristic Risk Scoring**: Users are assigned a dynamic risk score (0-100) based on their interaction patterns and block rates.
+- **Threshold Alerts**: If a user's risk exceeds a critical threshold (e.g., 80+), their account is flagged for forensic review.
+- **Threat Event Distribution**: Real-time categorization of security events into `Audit`, `Warning`, and `Critical` indicators.
 
 ---
-*Last Updated: 2026-04-04 · SysCallGuardian Engineering Team*
 
+## 📊 Analytics & Forensic Visualization
+
+The **Security Operations Center (SOC)** dashboard features:
+- **Forensic Scatter Stream**: A chronological visualization of system calls, mapped by decision (Allowed vs. Blocked).
+- **Metric Micro-Distributions**: Real-time charts showing system call volume, role distribution, and block rates.
+- **Live Intelligence Snapshot**: Categorized counters for active threats, flagged users, and forensic node status.
+
+---
+
+## 🛰️ API Reference (High-Level)
+
+### 1. Authentication
+- `POST /api/auth/login`: Identity verification and session issuance.
+- `POST /api/auth/register`: (Admin Only) Forensic user provisioning.
+
+### 2. Syscall Mediation
+- `POST /api/syscall/read`: Mediated file read with path validation.
+- `POST /api/syscall/write`: Multi-mode file write (Append, Overwrite, Offset).
+- `POST /api/syscall/execute`: Restricted process execution via allowlist.
+
+### 3. Forensic & Threat Data
+- `GET /api/logs`: Query-driven forensic audit stream.
+- `GET /api/logs/verify`: (Admin Only) Full cryptographic chain-of-trust audit.
+- `GET /api/threats/events`: Chronological list of heuristic threat indicators.
+
+---
+**SysCallGuardian — Forensic Stability, Cinematic Security.**
+JSON Security Policy Engine · HMAC-Protected Logs · Heuristic Intel Snapshot

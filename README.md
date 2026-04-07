@@ -1,71 +1,59 @@
-# SysCallGuardian — Professional System Call Gateway
+# SysCallGuardian 🛡️
 
-![Version](https://img.shields.io/badge/version-4.0.0--stable-blue)
-![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+**Cinematic Forensic System Call Gateway · Multi-Layered Security Mediation · RBAC Enforced**
 
-**SysCallGuardian** is a high-performance, security-focused system call gateway designed to monitor, filter, and audit system-level operations in real-time. It provides a centralized dashboard for administrators to enforce granular security policies across a multi-user environment.
+SysCallGuardian is a next-generation security infrastructure that serves as a mediated gateway for system operations. It provides a hardened interface between users and the underlying operating system, enforcing strict **Role-Based Access Control (RBAC)**, real-time **Heuristic Threat Intelligence**, and a **Chain-of-Trust Forensic Audit** system.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Key Capabilities
 
-### 1. Prerequisites
-- Python 3.8 or higher
-- SQLite3
+- **SysCall Mediation Engine**: Granular control over file operations (Read, Write, Delete, Offset), directory listing, and process execution.
+- **Forensic Chain-of-Audit**: Every operation is logged with a unique **SHA-256 HMAC** integrity signature, protecting the audit log from post-compromise tampering.
+- **Heuristic Threat Intel**: Real-time risk scoring (0-100) and block rate analysis to identify and isolation rogue operators.
+- **Cinematic Security Dashboard**: A high-fidelity, glassmorphism-inspired interface featuring forensic scatter charts and live security intelligence snapshots.
+- **Rule-Set Governance**: Advanced policy engine supporting live export/import of custom security mediation rules.
+
+## 🛠️ Project Stack
+
+- **Backend**: Python 3.10+ · Flask · SQLite3 (Forensic Integrity Layers)
+- **Frontend**: Vanilla JavaScript · HTML5 (Semantic) · CSS3 (Glassmorphism & CRT Shaders)
+- **Analytics**: Chart.js (Scatter Forensics & Metric Distros)
+- **Security**: SHA-256 HMAC Forensics · RBAC Middleware · System Mediation Layer
+
+## 🏁 Getting Started
+
+### 1. Requirements
+Ensure you have Python 3.10 or higher installed on your system.
 
 ### 2. Installation
+Clone the repository and install the standard library dependencies (no complex external packages required beyond Flask):
 ```bash
-# Clone the repository
-git clone https://github.com/your-repo/secure-syscall-gateway.git
-cd secure-syscall-gateway
-
-# Set up virtual environment
-python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
-
-# Install dependencies
-pip install -r requirements.txt
+# Backend Dependencies
+pip install flask requests
 ```
 
-### 3. Initialize Database
+### 3. Execution
+Launch the forensic gateway and access the dashboard at `http://localhost:5000`.
 ```bash
-# Seed the database with core users and roles
-python reseed_users.py
-```
-
-### 4. Run the Application
-```bash
-cd backend
+# In the project root
 python app.py
 ```
-The gateway will be active at `http://127.0.0.1:5000`.
+
+### 4. Admin Credentials
+Use the following credentials for initial system management:
+- **Username**: `Tejax`
+- **Password**: `U@itej99x`
 
 ---
 
-## 🔐 Core User Credentials (Test Accounts)
+## 🏛️ Forensic Architecture
 
-| Role | Username | Password | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `Tejax` | `U@itej99x` | Security oversight & Policy management |
-| **Developer** | `Vancika` | `Van112358` | Application development & Debugging |
-| **Guest A** | `GuestA` | `Guest@123` | Restricted trial access (Read-only) |
-| **Guest B** | `GuestB` | `Guest@456` | Restricted trial access (Read-only) |
+SysCallGuardian operates on a "Zero-Trust Mediation" principle. No system call reaches the OS without passing through the triple-lock verification:
+1. **RBAC Verification**: Checks if the user's role allows the operation.
+2. **Policy Negotiation**: Evaluates the specific target (e.g., path or command) against the active security rule-set.
+3. **Integrity Validation**: Cross-references the current transaction with the forensic chain-of-trust.
 
 ---
-
-## ✨ Key Features
-- **Real-time Syscall Interception**: Monitoring of `file_read`, `file_write`, `exec_process`, and more.
-- **Dynamic RBAC**: Dedicated dashboards for Admins, Developers, and Guests with strict data isolation.
-- **Managed Registration**: Public self-registration is disabled. New users must be registered by an **Admin** or **Developer** directly via the secure dashboard.
-- **SHA-256 Audit Chain**: Cryptographically linked logs to detect and prevent unauthorized tampering.
-- **Forgot Password**: Secure password reset flow remains active for all users via Email OTP.
-- **Threat Intelligence**: Automated risk scoring and user flagging based on heuristic analysis.
-- **CRT Terminal UI**: Modern, premium dashboard with a CRT scanline aesthetic and status-aware log coloring.
-
----
-
-## 📖 Documentation
-For a deep dive into the architecture, security protocols, and development roadmap, please refer to the [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md).
-
----
-*Developed by the SysCallGuardian Engineering Team*
+**Developed for Security Engineers & Forensic Analysts.**  
+*SysCallGuardian — Secure Operations, Cinematically Audited.*
