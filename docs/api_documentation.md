@@ -1,868 +1,248 @@
-# 📡 API Documentation
-**Project:** SysCallGuardian — Secure System Call Gateway with RBAC & Real-Time Monitoring
-**Version:** 1.0 · Phase 4 Complete
+# 📡 SysCallGuardian: API Technical Reference v4.0
+
+**Secure System Call Mediation · Multi-Role Audit Infrastructure · Integrity Monitoring**
+
+SysCallGuardian provides a robust, RESTful API surface for mediating system-level operations, enforcing granular security policies, and maintaining a cryptographically linked audit trail.
 
 ---
 
-## Base URL
-```
-http://localhost:5000
+## 🏛️ General Information
+
+### Base URL
+```text
+http://127.0.0.1:5000
 ```
 
-All protected routes require:
-```
-Authorization: Bearer <token>
-```
+### Security Tokens
+All protected routes require a JWT-equivalent session token issued upon login.
+- **Header**: `Authorization: Bearer <session_token>`
+
+### Response Standards
+The API communicates exclusively in **JSON**. Standardized response codes:
+- `200 OK`: Request successful.
+- `201 Created`: Resource (User/Policy) successfully generated.
+- `400 Bad Request`: Validation failure or missing parameters.
+- `401 Unauthorized`: Invalid, expired, or missing session token.
+- `403 Forbidden`: Role-Based Access Control (RBAC) or Policy violation.
+- `404 Not Found`: Resource (User/Policy/Log) does not exist.
+- `409 Conflict`: Resource (Username/Policy Name) already exists.
 
 ---
 
-## 🔐 Authentication APIs
+## 🔐 1. Identity & Access Management (IAM)
 
-### 1. Register User
-**POST** `/api/auth/register`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. 
-> **Hierarchy Check:** Developers can ONLY register `guest` accounts. Administrators can register any role.
-
-**Request Body:**
-```json
-{
-  "username": "tejas_guest",
-  "password": "StrongPass123!",
-  "role": "guest"
-}
-```
-
-**Response `201`:**
-```json
-{
-  "message": "User 'tejas' registered with role 'admin'."
-}
-```
-
-**Errors:**
-- `400` — Missing fields or weak password
-- `409` — Username already exists
-
----
-
-### 2. Login
-**POST** `/api/auth/login`
-
-**Request Body:**
-```json
-{
-  "username": "tejas",
-  "password": "AdminPass1"
-}
-```
-
-**Response `200`:**
-```json
-{
-  "message": "Login successful",
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "role": "admin",
-  "username": "tejas"
-}
-```
-
-**Errors:**
-- `400` — Missing fields
-- `401` — Invalid credentials (also increments risk_score)
-
----
-
-### 3. Logout
-**POST** `/api/auth/logout`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response `200`:**
-```json
-{
-  "message": "Logged out successfully."
-}
-```
-
-> Token is immediately invalidated in the sessions table. Any subsequent request with this token returns 401.
-
----
-
-## 👤 User & Role APIs
-
-### 4. Get Current User
-**GET** `/api/user/me`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response `200`:**
-```json
-{
-  "username": "tejas",
-  "role": "admin",
-  "is_flagged": false,
-  "risk_score": 0.0
-}
-```
-
----
-
-### 5. Get All Users
-**GET** `/api/users`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. Returns all users with real syscall statistics.
-
-**Response `200`:**
-```json
-[
+### **Authenticate Session**
+Exchange credentials for a secure session token.
+- **Endpoint**: `POST /api/auth/login`
+- **Auth**: Public
+- **Request Body**: `{ "username": "...", "password": "..." }`
+- **Response `200`**:
+  ```json
   {
-    "id": 1,
-    "username": "tejas",
+    "message": "Login successful",
+    "token": "sess_82f1...",
     "role": "admin",
-    "is_flagged": 0,
-    "risk_score": 0.0,
-    "created_at": "2026-04-01T10:00:00",
-    "total_calls": 4102,
-    "blocked_calls": 0
-  },
-  {
-    "id": 3,
-    "username": "guest1",
-    "role": "guest",
-    "is_flagged": 1,
-    "risk_score": 87.0,
-    "created_at": "2026-04-01T11:00:00",
-    "total_calls": 97,
-    "blocked_calls": 42
+    "username": "Tejax"
   }
-]
-```
+  ```
 
 ---
 
-### 6. Change User Role
-**PUT** `/api/users/:id/role`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. Admin cannot change their own role. 
-> **Security:** Developers can only change a user's role TO `guest` and cannot modify existing `admin` accounts.
-
-**Request Body:**
-```json
-{
-  "role": "developer"
-}
-```
-
-**Response `200`:**
-```json
-{
-  "message": "Role updated to 'developer' for user 'guest1'.",
-  "user_id": 3,
-  "new_role": "developer"
-}
-```
-
-**Errors:**
-- `400` — Invalid role value
-- `400` — Cannot change your own role
-- `404` — User not found
+### **Managed Registration**
+Register a new user account with strict hierarchy enforcement.
+- **Endpoint**: `POST /api/auth/register`
+- **Auth**: `developer`+
+- **Rule**: **Admins** can register any role; **Developers** can ONLY register `guest` accounts.
+- **Request Body**: `{ "username": "...", "email": "...", "password": "...", "role": "..." }`
 
 ---
 
-### 7. Revoke User Session
-**POST** `/api/users/:id/revoke`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. Deletes all active sessions for the user — forces re-login.
-
-**Response `200`:**
-```json
-{
-  "message": "Revoked 1 session(s).",
-  "sessions_revoked": 1
-}
-```
+### **Revise Password (OTP Flow)**
+Initiate a secure password recovery sequence.
+- **Endpoint**: `POST /api/auth/forgot-password`
+- **Auth**: Public
+- **Scenarios**:
+  - **Admins**: Triggers urgent security alert to system owners.
+  - **Developers**: Generates a single-use secure link for identity verification.
+  - **Guests**: Issues a 6-digit verification code (OTP) via email.
+- **Request Body**: `{ "identity": "..." }`
 
 ---
 
-### 8. Clear User Flag
-**POST** `/api/users/:id/unflag`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. Resets `is_flagged = 0` and `risk_score = 0.0`.
-
-**Response `200`:**
-```json
-{
-  "message": "User 'guest1' cleared — flag and risk score reset.",
-  "user_id": 3
-}
-```
-
-**Errors:**
-- `404` — User not found
+### **Reset Password**
+Commit a new password using a valid verification OTP.
+- **Endpoint**: `POST /api/auth/reset-password`
+- **Auth**: Public
+- **Request Body**: `{ "identity": "...", "otp": "...", "new_password": "..." }`
 
 ---
 
-### 9. Get All Roles
-**GET** `/api/user/roles`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher.
-
-**Response `200`:**
-```json
-{
-  "admin":     ["file_read","file_write","file_delete","dir_list","exec_process","system_dir_access","view_logs","manage_policies","view_dashboard"],
-  "developer": ["file_read","file_write","dir_list","exec_process","view_logs","view_dashboard"],
-  "guest":     ["file_read","dir_list"]
-}
-```
+### **Identify Role**
+Retrieve the role associated with an identity without exposing sensitive data.
+- **Endpoint**: `POST /api/auth/recover-info`
+- **Auth**: Public
+- **Request Body**: `{ "identity": "..." }`
+- **Response**: `{ "role": "guest/developer/admin" }`
 
 ---
 
-## 🛡️ Policy APIs
-
-### 10. Get All Policies
-**GET** `/api/policies`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Returns all policies (active and inactive).
-
-**Response `200`:**
-```json
-[
-  {
-    "id": 1,
-    "name": "block_guest_exec",
-    "rule_json": {
-      "action": "exec_process",
-      "allow_roles": ["admin", "developer"],
-      "deny_roles": ["guest"]
-    },
-    "is_active": true,
-    "updated_at": "2026-04-01T10:00:00"
-  }
-]
-```
+### **Active Session Termination**
+Invalidate the current session token.
+- **Endpoint**: `POST /api/auth/logout`
+- **Auth**: Required
 
 ---
 
-### 11. Create Policy
-**POST** `/api/policies`
+## 👤 2. User & Administrative Control
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role.
-
-**Request Body:**
-```json
-{
-  "name": "block_guest_write",
-  "rule_json": {
-    "action": "file_write",
-    "allow_roles": ["admin", "developer"],
-    "deny_roles": ["guest"],
-    "conditions": {
-      "max_risk_score": 60
-    }
-  }
-}
-```
-
-**Response `201`:**
-```json
-{
-  "message": "Policy created successfully.",
-  "id": 6
-}
-```
-
-**Errors:**
-- `400` — Missing name or rule_json, invalid action, unknown roles, role conflict
-- `409` — Policy name already exists
+### **Personal Profile Telemetry**
+Retrieve the current user's security standing and risk metrics.
+- **Endpoint**: `GET /api/user/me`
+- **Auth**: `guest`+
+- **Response**: Returns `username`, `role`, `risk_score`, and `is_flagged` status.
 
 ---
 
-### 12. Preview Active Policies (Developer Filter)
-**GET** `/api/policies/preview`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. 
-> Returns a filtered, read-only list of **active** policy names and IDs. This helps developers understand why certain system calls are being blocked without exposing sensitive rule JSON internals.
-
-**Response `200`:**
-```json
-[
-  {
-    "id": 1,
-    "name": "block_guest_exec",
-    "is_active": true
-  }
-]
-```
+### **Global User Audit**
+List all registered users with real-time system call statistics.
+- **Endpoint**: `GET /api/users`
+- **Auth**: `developer`+
+- **Metrics returned**: `total_calls`, `blocked_calls`, `risk_score`, `is_flagged`.
 
 ---
 
-### 13. Update Policy
-**PUT** `/api/policies/:id`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Provide at least one of `rule_json` or `is_active`.
-
-**Request Body:**
-```json
-{
-  "rule_json": {
-    "action": "file_write",
-    "allow_roles": ["admin"]
-  },
-  "is_active": true
-}
-```
-
-**Response `200`:**
-```json
-{
-  "message": "Policy updated."
-}
-```
-
-**Errors:**
-- `400` — No fields provided, invalid rule
-- `404` — Policy not found
+### **Managed Account Remediation**
+| Endpoint | Method | Role | Logic |
+| :--- | :--- | :--- | :--- |
+| `/api/users/:id/role` | `PUT` | `dev`+ | Developers can only demote/promote to `guest`. |
+| `/api/users/:id/revoke`| `POST` | `dev`+ | Forcefully kills all active sessions for the user. |
+| `/api/users/:id/unflag`| `POST` | `dev`+ | Resets risk score and clears suspicious flags. |
+| `/api/users/:id` | `DELETE` | `admin` | Hard deletion of account and all associated logs. |
 
 ---
 
-### 14. Delete Policy
-**DELETE** `/api/policies/:id`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Permanently removes a policy from the gateway database.
-
-**Response `200`:**
-```json
-{
-  "success": true,
-  "message": "Policy deleted."
-}
-```
+### **Permission Matrix Discovery**
+Describe the system call capabilities for every role in the system.
+- **Endpoint**: `GET /api/user/roles`
+- **Auth**: `developer`+
+- **Response**: Key/Value list of roles and their permitted system calls.
 
 ---
 
-### 15. Export Rule-set
-**GET** `/api/policies/export`
+## 🛡️ 3. Security Policy Governance
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Downloads the entire security policy set as a JSON list. Ideal for backups and multi-environment synchronization.
-
-**Response `200`:**
-```json
-[
-  {
-    "id": 1,
-    "name": "block_guest_exec",
-    "rule_json": "{...}",
-    "is_active": 1,
-    "updated_at": "..."
-  }
-]
-```
+### **Active Rule Management**
+- **Endpoint**: `GET /api/policies`
+- **Auth**: `developer`+
+- **Logic**: Admins see full JSON rules; Developers see a sanitized list of rules.
+- **GET `/api/policies/preview`**: Provides a lightweight, read-only view of active policies for developers.
 
 ---
 
-### 16. Import Rule-set
-**POST** `/api/policies/import`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Uploads a JSON rule-set to update or restore policies in bulk.
-> **Logic:** `INSERT OR REPLACE` — existing policies with the same name will be updated.
-
-**Request Body:**
-```json
-[
-  {
-    "name": "restrict_system_dirs",
-    "rule_json": "...",
-    "is_active": 1
-  }
-]
-```
-
-**Response `200`:**
-```json
-{
-  "message": "Successfully imported 5 security policies."
-}
-```
+### **Policy Lifecycle Operations**
+- **POST `/api/policies`**: Add a new mediation rule (`admin` only).
+- **PUT `/api/policies/:id`**: Update rule logic or toggle `is_active` (`admin` only).
+- **DELETE `/api/policies/:id`**: Permanently remove a mediation rule (`admin` only).
 
 ---
 
-## ⚙️ System Call APIs
-
-> 🔒 All syscall routes require `Authorization: Bearer <token>`.
-> RBAC and policy checks are enforced before any execution.
-
-### 13. Read File
-**POST** `/api/syscall/read`
-
-**Request Body:**
-```json
-{
-  "file_path": "test.txt"
-}
-```
-
-**Response `200` (allowed):**
-```json
-{
-  "status": "allowed",
-  "content": "File content here"
-}
-```
-
-**Response `403` (blocked):**
-```json
-{
-  "status": "blocked",
-  "reason": "Role 'guest' lacks permission 'file_read'."
-}
-```
+### **Bulk Synchronization**
+- **Export Rule-set**: `GET /api/policies/export` — Backup all policies as a JSON list (`admin` only).
+- **Import Rule-set**: `POST /api/policies/import` — Restore policies from a JSON list (`admin` only).
 
 ---
 
-### 14. Write File
-**POST** `/api/syscall/write`
+## ⚙️ 4. Mediated System Call Gateway
 
-**Request Body:**
-```json
-{
-  "file_path": "test.txt",
-  "data": "Hello World"
-}
-```
+> 🔒 **Pre-execution Logic**: Every syscall endpoint enforces path sanitization, command whitelisting, and role-based policy evaluation before interacting with the host OS.
 
-**Response `200`:**
-```json
-{
-  "status": "allowed",
-  "message": "Write successful"
-}
-```
+### **File Operations**
+Execute filtered file-level requests.
+- **Endpoints**: `POST /api/syscall/read`, `POST /api/syscall/write`, `POST /api/syscall/delete`.
+- **Directory List**: `POST /api/syscall/dir_list`
+- **Payload**: `{ "file_path": "scripts/audit.log" }`
+- **Response**: `200` (success) OR `403` (Blocked by policy).
 
 ---
 
-### 15. Delete File
-**POST** `/api/syscall/delete`
-
-**Request Body:**
-```json
-{
-  "file_path": "test.txt"
-}
-```
-
-**Response `403` (guest/developer blocked):**
-```json
-{
-  "status": "blocked",
-  "reason": "Role 'developer' is not permitted for 'file_delete' (policy: 'block_guest_delete')."
-}
-```
+### **Resource Explorer**
+Enumerate the current sandbox root directory.
+- **Endpoint**: `GET /api/syscall/explorer`
+- **Auth**: `guest`+
+- **Logic**: Defaults to the secure project root directory for safe exploration.
 
 ---
 
-### 16. Execute Process
-**POST** `/api/syscall/execute`
-
-**Request Body:**
-```json
-{
-  "command": "ls -la"
-}
-```
-
-**Response `200`:**
-```json
-{
-  "status": "allowed",
-  "output": "total 12\ndrwxr-xr-x ...",
-  "return_code": 0
-}
-```
-
-**Response `403` (blocked command):**
-```json
-{
-  "status": "blocked",
-  "reason": "Command 'rm' is not in the allowed command list."
-}
-```
-
-> Allowed commands: `ls`, `pwd`, `whoami`, `echo`, `cat`, `head`, `tail`, `python3`, `python`, `node`, `java`, `grep`, `find`, `mkdir`, `touch`, `cp`, `mv`, `wc`, `sort`, `uniq`
+### **Restricted Process Execution**
+Spawn whitelisted diagnostic processes on the host.
+- **Endpoint**: `POST /api/syscall/execute`
+- **Auth**: `guest`+
+- **Body**: `{ "command": "...", "args": [...] }`
+- **Whitelist includes**: `ls`, `pwd`, `whoami`, `echo`, `cat`, `python3`, `node`, `grep`, `find`, `mkdir`, `touch`, `cp`, `mv`, `wc`, `sort`, `uniq`.
 
 ---
 
-### 21. System Information
-**POST** `/api/syscall/system_info`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `guest` role or higher. Returns system-level metadata like OS version, CPU count, and memory stats.
-
-**Response `200`:**
-```json
-{
-  "status": "allowed",
-  "data": {
-    "os": "Windows-10-10.0.19045-SP0",
-    "cpu_count": 8,
-    "memory_mb": 16384,
-    "node_name": "GATEWAY-01"
-  }
-}
-```
+### **System Diagnostic Metadata**
+Retrieve host-level information (OS version, CPU architecture, memory availability).
+- **Endpoint**: `GET /api/syscall/system_info`
+- **Auth**: `guest`+
 
 ---
 
-## 📜 Logging APIs
+## 📜 5. Audit logs & Security Monitoring
 
-### 17. Get Logs
-**GET** `/api/logs`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher.
-
-**Query Parameters (all optional):**
-
-| Param | Type | Description |
-|---|---|---|
-| `user` | string | Filter by username |
-| `status` | string | `allowed` / `blocked` / `flagged` |
-| `call_type` | string | `file_read` / `file_write` / `exec_process` / etc. |
-| `date` | string | `2026-03-25` |
-| `from` | string | `2026-03-25T00:00:00` |
-| `to` | string | `2026-03-25T23:59:59` |
-| `page` | integer | Page number (default: 1) |
-| `per_page` | integer | Results per page (default: 20) |
-
-**Response `200`:**
-```json
-{
-  "page": 1,
-  "total": 120,
-  "logs": [
-    {
-      "id": 42,
-      "user": "tejas",
-      "call_type": "file_read",
-      "target_path": "test.txt",
-      "status": "allowed",
-      "reason": null,
-      "risk_delta": 0.0,
-      "timestamp": "2026-03-25T10:00:00",
-      "hash_preview": "a3f2c1d8e4b7…"
-    }
-  ]
-}
-```
+### **Centralized Audit Query**
+Access the global system activity log.
+- **Endpoint**: `GET /api/logs`
+- **Auth**: `guest`+
+- **Data Isolation**: 
+  - **Guests**: See only their own logs.
+  - **Developers**: See all logs with sensitive paths (e.g., `/etc/shadow`) masked.
+  - **Admins**: Full global visibility.
+- **Parameters**: `user`, `status` (allowed/blocked/flagged), `call_type`, `from`, `to`, `page`, `per_page`.
 
 ---
 
-### 18. Verify All Log Integrity
-**GET** `/api/logs/verify`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Walks the full SHA-256 hash chain across all log entries.
-
-**Response `200` (valid):**
-```json
-{
-  "status": "valid",
-  "message": "Logs are not tampered. Chain integrity verified.",
-  "tampered_ids": []
-}
-```
-
-**Response `200` (tampered):**
-```json
-{
-  "status": "tampered",
-  "message": "Tampering detected in 2 log entries.",
-  "tampered_ids": [5, 12]
-}
-```
+### **Audit Trail Integrity**
+Verify the cryptographic SHA-256 hash chains.
+- **Verify All**: `GET /api/logs/verify` (`admin` only)
+- **Verify Item**: `GET /api/logs/verify/:id` (`admin` only)
+- **Logic**: Re-computes hashes from row data and checks against the `prev_hash` chain link.
 
 ---
 
-### 19. Verify Single Log Entry
-**GET** `/api/logs/verify/:id`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Verifies the hash of one specific log entry.
-
-**Response `200`:**
-```json
-{
-  "log_id": 42,
-  "valid": true,
-  "tampered": false,
-  "message": "Hash verified."
-}
-```
+### **Threat Landscape**
+- **Aggregated Threats**: `GET /api/threats` — List users with critical risk standings (`admin` only).
+- **Detection Stream**: `GET /api/threats/events` — Chronological feed of every security violation event (`admin` only).
 
 ---
 
-## 🚨 Threat Detection APIs
+## 📊 6. Dashboard Telemetry Analytics
 
-### 20. Get Suspicious Users
-**GET** `/api/threats`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Returns users with `is_flagged = 1` or `risk_score >= 20`.
-
-**Response `200`:**
-```json
-[
-  {
-    "user_id": 3,
-    "username": "guest1",
-    "role": "guest",
-    "risk_score": 87.0,
-    "risk_level": "critical"
-  },
-  {
-    "user_id": 4,
-    "username": "intern_k",
-    "role": "guest",
-    "risk_score": 28.0,
-    "risk_level": "medium"
-  }
-]
-```
-
-**Risk Levels:**
-
-| Score | Level |
-|---|---|
-| 0 – 19 | low |
-| 20 – 39 | medium |
-| 40 – 69 | high |
-| 70 – 100 | critical |
+### **Operational Stats**
+Return high-level volume metrics for the dashboard summary cards.
+- **Endpoint**: `GET /api/dashboard/stats`
+- **Auth**: `guest`+ (Scope filtered)
+- **Includes**: Total calls, Success/Block ratio, High-risk user count.
 
 ---
 
-### 26. Get Threat Events (Chronological Log)
-**GET** `/api/threats/events`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `admin` role. Returns a granular, event-level log of every threat detection. Unlike `/api/threats`, which groups by user, this endpoint shows each unique security violation as it occurred.
-
-**Response `200`:**
-```json
-[
-  {
-    "timestamp": "2026-04-06T01:47:00",
-    "user": "johndoe",
-    "event": "Blocked file_read probe",
-    "risk_score": 85.0
-  }
-]
-```
+### **Activity Timelines**
+Retrieve syscall volume data binned by hour (last 24 hours).
+- **Endpoint**: `GET /api/dashboard/activity`
+- **Auth**: `guest`+
 
 ---
 
-## 📊 Dashboard APIs
-
-### 21. System Statistics
-**GET** `/api/dashboard/stats`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher.
-
-**Response `200`:**
-```json
-{
-  "total_calls": 4821,
-  "allowed": 4512,
-  "blocked": 309,
-  "flagged": 5,
-  "suspicious_users": 3,
-  "top_users": [
-    { "username": "tejas", "call_count": 4102 },
-    { "username": "dev1",  "call_count": 712  }
-  ]
-}
-```
+### **Extended Analytics Package**
+Advanced telemetry for complex visualizations.
+- **Endpoint**: `GET /api/dashboard/extended`
+- **Components**:
+  - **Heatmap**: syscall density across user/operation dimensions.
+  - **Risk Ranking**: Comparative list of user risk scores.
+  - **Role Distribution**: Syscall volume share by role.
+  - **Recent Activity**: The last 100 system events (RBAC sanitized).
 
 ---
-
-### 22. Activity Timeline
-**GET** `/api/dashboard/activity`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-> 🔒 Requires `developer` role or higher. Returns hourly data for the last 12 hours.
-
-**Response `200`:**
-```json
-[
-  { "hour": "10:00", "allowed": 210, "blocked": 12, "calls": 222 },
-  { "hour": "11:00", "allowed": 318, "blocked": 22, "calls": 340 }
-]
-```
-
----
-
-## 🔒 Security Notes
-
-- All protected routes require a valid JWT in the `Authorization: Bearer` header
-- RBAC enforced at middleware level — permission check happens before any business logic
-- Policies evaluated dynamically at runtime — changes take effect immediately
-- All system calls are validated, sanitized, logged, and checked against active policies
-- SHA-256 hash chaining makes audit logs tamper-evident
-- Risk score updated on every blocked or flagged call attempt
-- Failed logins increment risk score by 10.0 per attempt; 5 failures triggers flag
-
----
-
-## 📌 HTTP Status Codes
-
-| Code | Meaning |
-|---|---|
-| 200 | Success |
-| 201 | Created |
-| 400 | Bad Request — missing or invalid fields |
-| 401 | Unauthorized — missing, invalid, or expired token |
-| 403 | Forbidden — insufficient role or permission |
-| 404 | Not Found |
-| 409 | Conflict — duplicate resource |
-| 500 | Internal Server Error |
-
----
-
-## 🧠 Policy Rule Format Reference
-
-```json
-{
-  "action":      "exec_process",
-  "allow_roles": ["admin", "developer"],
-  "deny_roles":  ["guest"],
-  "conditions":  {
-    "max_risk_score": 60,
-    "time_range":     ["09:00", "18:00"]
-  }
-}
-```
-
-| Field | Required | Description |
-|---|---|---|
-| `action` | ✅ | Syscall type this rule governs |
-| `allow_roles` | ❌ | Roles explicitly permitted |
-| `deny_roles` | ❌ | Roles explicitly blocked (evaluated first) |
-| `conditions.max_risk_score` | ❌ | Block if user's risk_score exceeds this |
-| `conditions.time_range` | ❌ | Only allow within this UTC time window |
-
-**Valid actions:** `file_read`, `file_write`, `file_delete`, `dir_list`, `exec_process`, `system_dir_access`
-
-**Decision order:**
-1. No matching active policy → **ALLOW** (default permissive)
-2. Role in `deny_roles` → **DENY**
-3. Role not in `allow_roles` → **DENY**
-4. Condition fails → **DENY**
-5. All checks pass → **ALLOW**
-
----
-
-*SysCallGuardian API Documentation · v1.0 · Phase 4 Complete*
+**SysCallGuardian — Stability through Observation.**
+*Engine v4.0.0 Stable Build.*
