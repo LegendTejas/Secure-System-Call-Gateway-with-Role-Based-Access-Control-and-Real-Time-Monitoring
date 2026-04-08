@@ -1,6 +1,6 @@
 """
 syscall_layer/file_operations.py
-Vanshika — Secure file operation wrappers: read, write, delete, dir_list.
+Secure file operation wrappers: read, write, delete, dir_list.
 All functions return { success, result/content, error } dicts.
 """
 

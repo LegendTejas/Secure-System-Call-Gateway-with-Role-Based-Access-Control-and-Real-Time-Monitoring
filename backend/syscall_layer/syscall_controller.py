@@ -1,6 +1,6 @@
 """
 syscall_layer/syscall_controller.py
-Vanshika — Central syscall orchestrator.
+Central syscall orchestrator.
 
 Flow for every call:
   1. Validate input

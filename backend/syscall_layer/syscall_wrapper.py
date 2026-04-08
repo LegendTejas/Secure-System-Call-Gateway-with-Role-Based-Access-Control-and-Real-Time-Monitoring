@@ -1,6 +1,6 @@
 """
 syscall/syscall_wrapper.py
-Vanshika — Secure System Call Wrapper Layer.
+Secure System Call Wrapper Layer.
 
 This is the CORE of Vanshika's work.
 Every file/command operation passes through here AFTER RBAC approval.

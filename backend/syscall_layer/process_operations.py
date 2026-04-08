@@ -1,6 +1,6 @@
 """
 syscall_layer/process_operations.py
-Vanshika — Secure subprocess execution wrapper.
+Secure subprocess execution wrapper.
 Uses subprocess with strict timeout, no shell=True, whitelist-only.
 """
 

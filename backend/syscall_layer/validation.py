@@ -1,6 +1,6 @@
 """
 syscall_layer/validation.py
-Vanshika — Input validation and path sanitization for all syscall operations.
+Input validation and path sanitization for all syscall operations.
 """
 
 import os
