@@ -11,27 +11,57 @@ SysCallGuardian is a high-fidelity forensic system call gateway designed to medi
 SysCallGuardian operates as an interceptor between the User/Application layer and the Operating System. Every request flows through a strict operational pipeline designed to stop unauthorized movements and ensure complete forensic visibility.
 
 ```mermaid
+graph TD
+    U["User Space / Dashboard"] -->|"1. HTTP Request + Payload"| Auth["Auth & Session Layer"]
+    
+    subgraph SysCallGuardian Array
+        Auth -->|"2. Valid Context"| RBAC["Policy & RBAC Engine"]
+        RBAC -->|"3. Permitted Context"| Val["Validation & Sanitization"]
+        Val -->|"4. Safe Command"| Exec["Native Syscall Wrapper"]
+        Val -.->|"4b. Threat Blocked"| Log["Forensic HMAC Auditor"]
+        Exec -->|"6. Operational Status"| Log
+    end
+
+    Exec -.->|"5. Host Operations"| OS["Host Operating System"]
+    Log -.->|"7. Append Cryptographic Chain"| DB["SQLite Memory"]
+```
+
+#### Detailed Transaction Lifecycle
+```mermaid
 sequenceDiagram
     participant User
-    participant Auth as Auth & Session Layer
-    participant Policy as Policy Engine & RBAC
-    participant Validate as Validation & Sanitization
-    participant Execution as Native Syscall Wrapper
-    participant Forensic as Forensic HMAC Auditor
+    participant Auth as Auth & Policy
+    participant Val as Validation Layer
+    participant Exec as Native Execution
+    participant Log as HMAC Auditor
     participant OS as Operating System
 
     User->>Auth: Request System Operation
-    Auth->>Auth: Validate Token / Session
-    Auth->>Policy: Forward Session Context
-    Policy->>Policy: Check Role Permissions
-    Policy->>Validate: If Permitted, Pass Payload
-    Validate->>Validate: Sanitize Path + Regex Threat Scan
-    Validate->>Execution: Forward Safe Command
-    Execution->>OS: Execute Native Environment Call
-    OS-->>Execution: Return Payload
-    Execution->>Forensic: Route Outcome Status
-    Forensic->>Forensic: Generate Cryptographic Hash Chain Event
-    Forensic-->>User: Return Forensic Receipt & Output
+    Note over Auth: Verify Session Identity & Check Role DB
+    
+    alt Permissions Denied
+        Auth-->>User: 403 Forbidden
+    else Context Authorized
+        Auth->>Val: Forward Execution Payload
+        Note over Val: Regex Threat Scan & Directory Whitelisting
+        
+        alt Injection / Threat Detected
+            Val->>Log: Report Threat Violation
+            Val-->>Auth: 406 Not Acceptable (Dangerous Payload)
+        else Payload is Safe
+            Val->>Exec: Send Formatted Command
+            Exec->>OS: Trigger Native OS Execution
+            OS-->>Exec: Return Subprocess Output
+            
+            Exec->>Log: Report Final Operation State
+            Note right of Log: Construct SHA-256 Block
+            Log-->>Exec: Confirm Cryptographic Log ID
+            
+            Exec-->>Val: Execution Output
+            Val-->>Auth: Propagate Results
+            Auth-->>User: Return OS Stdout & Log Receipt
+        end
+    end
 ```
 
 ---
