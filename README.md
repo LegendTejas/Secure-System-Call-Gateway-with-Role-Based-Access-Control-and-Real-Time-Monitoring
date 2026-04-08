@@ -1,115 +1,128 @@
-# SysCallGuardian — Professional System Call Gateway
+# SysCallGuardian
 
-![Version](https://img.shields.io/badge/version-4.0.0--stable-blue)
-![Python](https://img.shields.io/badge/python-3.8%2B-blue)
-![Security](https://img.shields.io/badge/security-SHA--256%20Forensics-green)
+![Version](https://img.shields.io/badge/version-4.0.0--stable-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)
+![Security](https://img.shields.io/badge/security-SHA--256-success.svg)
 
-**SysCallGuardian** is a high-performance, security-focused system call gateway designed to monitor, filter, and audit system-level operations in real-time. It provides a centralized dashboard for administrators to enforce granular security policies across a multi-user environment.
-
----
-
-## 🏛️ Technical Architecture
-
-SysCallGuardian acts as a high-fidelity mediation layer between user applications and the host operating system. Every request is scrubbed, validated, and cryptographically signed before execution.
-
-![Architecture Overview](docs/architecture.png)
-*Figure 1: High-level System Call Interception and Forensic Pipeline.*
-
-![Flow Diagram](docs/flow_diagram.png)
-*Figure 2: Comprehensive Request Lifecycle with RBAC and Policy Evaluation.*
+**SysCallGuardian** is a high-fidelity, high-performance system call gateway engineered to mediate, audit, and secure operating system-level operations in real-time. Designed as a protective layer between user actions and the underlying host system, it provides centralized enforcement of granular security policies, advanced forensic auditing, and heuristic threat detection across a multi-user environment.
 
 ---
 
-## 🚀 Quick Start
+## 🔥 Core Capabilities
+
+- **Strict Access Mediation**: Intercepts, sanitizes, and evaluates all file and process operations against a robust whitelist and regex-based threat signatures.
+- **Cryptographic Log Integrity**: Every user operation is logged and cryptographically signed using SHA-256 HMAC cascading chains, ensuring forensic audibility and tamper evidence.
+- **Heuristic Threat Engine**: Implements dynamic risk-scoring assigned per user, triggering real-time alerts and blocking automated attacks or lateral movement attempts.
+- **Role-Based Access Control (RBAC)**: Centralized authorization model with strict boundary management, separating Administrative oversight, Developer access, and Guest isolation.
+- **Cinematic Forensic Interface**: A dynamic, fully responsive, and visually immersive frontend dashboard for security operations center (SOC) monitoring.
+
+---
+
+## 🏗️ Technical Stack
+
+- **Backend core**: Python, Flask, SQLite3, Cryptography (HMAC/SHA-256).
+- **Frontend interface**: Vanilla HTML5, CSS3 (Glassmorphism + CRT Aesthetics), JavaScript (ES6+), Chart.js.
+- **Security Protocols**: JWT-equivalent sessioning, Bcrypt hashing, strict API rate-limiting.
+
+---
+
+## 🚀 Quick Start Guide
 
 ### 1. Prerequisites
-- Python 3.8 or higher
-- SQLite3
 
-### 2. Installation
+- **Python 3.8+** installed on your host system.
+- Standard Unix/Linux or Windows environment.
+
+### 2. Installation Setup
+
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/secure-syscall-gateway.git
+git clone https://github.com/your-org/secure-syscall-gateway.git
 cd secure-syscall-gateway
 
-# Set up virtual environment
+# Initialize and activate the virtual environment
 python -m venv venv
-source venv/Scripts/activate  # venv/bin/activate on Linux/macOS
+source venv/Scripts/activate  # Or `source venv/bin/activate` on Unix systems
 
-# Install dependencies
+# Install required dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Initialize Database
+### 3. Database Initialization
+
 ```bash
-# Seed the database with core users and roles
+# Seed the initial users, roles, and populate the database with mock logs
 python reseed_users.py
 ```
 
-### 4. Run the Application
+### 4. Running the Gateway
+
 ```bash
+# Navigate to the backend service location
 cd backend
+
+# Launch the secure gateway
 python app.py
 ```
-The gateway will be active at `http://127.0.0.1:5000`.
+
+The unified dashboard and gateway will be accessible at: `http://127.0.0.1:5000`.
 
 ---
 
-## 🔐 Core User Credentials (Test Accounts)
-
-| Role | Username | Password | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `Tejax` | `U@itej99x` | Security oversight & Policy management |
-| **Developer** | `Vancika` | `Van112358` | Application development & Debugging |
-| **Guest A** | `GuestA` | `Guest@123` | Restricted trial access (Read-only) |
-| **Guest B** | `GuestB` | `Guest@456` | Restricted trial access (Read-only) |
-
----
-
-## ✨ Key Features & Real-world Implementation
-
-### 🛡️ 1. Security Mediation Layer
-The system uses `syscall_layer/validation.py` to enforce strict isolation via:
-- **Path Sanitization**: Prevents access to `/etc/passwd`, `/etc/shadow`, `/proc`, `/sys/kernel`, and more.
-- **Command Whitelisting**: Only trusted utilities (e.g., `ls`, `grep`, `python3`, `node`) are permitted for `exec_process`.
-- **Injection Protection**: Regex-based detection of shell patterns like `; rm`, `| sh`, and `$(...)`.
-
-### 🔍 2. Digital Forensic Chain (HMAC)
-To ensure audit log integrity, every event is cryptographically linked in `logging_detection/log_integrity.py`:
-- **SHA-256 Hashing**: Each log entry is hashed with the `prev_hash` of the preceding entry.
-- **Chain Verification**: Administrators can run a full-chain audit to detect any tampering in the history.
-- **Tamper Alerting**: The UI flags specific log IDs if their cryptographic signature fails verification.
-
-### 🧠 3. Heuristic Threat Intelligence
-Real-time risk scoring is computed in `logging_detection/risk_scoring.py`:
-- **Dynamic Delta**: High-risk attempts (like `exec_process` violations) add more risk (+15.0) than simple read blocks (+3.0).
-- **Risk Thresholds**: Users are automatically flagged as **High** (40+) or **Critical** (70+) based on cumulative behavior.
-- **SOC Dashboard**: A live feed of heuristic events with status-aware log coloring.
-
----
-
-## 📁 Project Anatomy
+## 🗂️ Folder Structure
 
 ```text
 secure-syscall-gateway/
 ├── backend/                # Flask Core & Security Engines
-│   ├── auth_rbac/          # JWT & Role-Based Access Control
-│   ├── logging_detection/  # Forensic Chain & Risk Scoring
-│   ├── policy_engine/      # JSON/YAML Security Policies
-│   ├── routes/             # API Endpoints (Auth, Syscalls, Logs)
-│   └── syscall_layer/      # Validation & Native Interception
-├── frontend/               # CRT Terminal UI (HTML/JS/CSS)
-│   ├── css/                # Cinematic Styling & CRT Effects
-│   └── js/                 # Terminal Logic & API Integration
-├── docs/                   # Technical Manuals & Diagrams
-├── tests/                  # Pytest Forensic Suite
-└── database/               # SQLite Schema & Migration Logic
+│   ├── auth_rbac/          # Identity & Access Management
+│   ├── database/           # SQLite Schemas & Operations
+│   ├── logging_detection/  # HMAC Forensic Chain & Heuristics
+│   ├── routes/             # REST API Endpoints
+│   └── syscall_layer/      # OS Execution & Validation Layer
+├── frontend/               # SPA Dashboard & Terminal Interface
+│   ├── css/                # Glassmorphism & UI Themes
+│   ├── js/                 # Client-side API Controllers
+│   └── src/                # Core frontend source files
+├── tests/                  # Pytest Validation Suites
+├── PROJECT_OVERVIEW.md     # In-Depth Technical Manual
+└── README.md               # Project Quick Start Guide
 ```
 
 ---
 
-## 📖 Documentation
-For a deep dive into the architecture, security protocols, and development roadmap, please refer to the [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md).
+## 🔐 Default Environment Roles
+
+SysCallGuardian ships with core pre-configured accounts designed for testing the RBAC boundaries:
+
+| Role Level              | Username    | Password      | Operational Purpose                                             |
+| :---------------------- | :---------- | :------------ | :-------------------------------------------------------------- |
+| **Administrator** | `Tejax`   | `U@itej99x` | Security oversight, full policy control, full audit capability. |
+| **Administrator** | `Akael`   | `Akhil9890` | System administration, forensic review, security enforcement.   |
+| **Developer**     | `Vancika` | `Van112358` | Environment debugging, restricted execution access.             |
+| **Guest Tier A**  | `GuestA`  | `Guest@123` | Read-only constrained access. High-risk actions denied.         |
+| **Guest Tier B**  | `GuestB`  | `Guest@456` | Read-only constrained access. High-risk actions denied.         |
+
+> **Note**: For production environments, it is strictly required to change these default passwords and remove unneeded guest accounts.
+
+### Allowed Syscalls Mapping
+
+| Role | File Read / List | File Write | File Delete | Process Execution | System Actions |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Administrator** | ✅ | ✅ | ✅ | ✅ (Whitelisted) | ✅ |
+| **Developer** | ✅ | ✅ | ❌ | ✅ (Limited) | ❌ |
+| **Guest** | ✅ (Safe Paths) | ❌ | ❌ | ❌ | ❌ |
 
 ---
-*Developed by the SysCallGuardian Engineering Team*
+
+## 📚 Comprehensive Documentation
+
+For engineers, SOC analysts, and forensic auditors, detailed system documentation is available in the **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** manual. It covers:
+
+- Exhaustive folder structures and internal mechanisms.
+- Cryptographic hash chaining strategies.
+- API route guidelines and permission matrices.
+- The underlying heuristics engine design.
+
+---
+
+*SysCallGuardian is developed to bring enterprise-grade forensic stability to complex system call architectures.*
