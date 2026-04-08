@@ -1,6 +1,6 @@
 /**
  * frontend/js/user_management.js
- * Phase 4 — User Management
+ * User Management
  *
  * Replaces the static user cards with real data from /api/users.
  * Provides: role change, session revoke, flag clear.
