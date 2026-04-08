@@ -1,6 +1,6 @@
 """
 auth_rbac/permission_middleware.py
-Tejas — Flask decorators for route-level auth and permission enforcement.
+Flask decorators for route-level auth and permission enforcement.
 """
 
 from functools import wraps
