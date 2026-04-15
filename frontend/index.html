@@ -566,7 +566,7 @@
           <!-- Right: Terminal Output -->
           <div style="display:flex;flex-direction:column;gap:12px;">
 
-            <div class="terminal-window" style="flex:1;">
+            <div class="terminal-window">
               <div class="terminal-header">
                 <div class="terminal-title-wrap">
                   <span class="terminal-icon">>_</span>
@@ -574,7 +574,7 @@
                 </div>
                 <div id="terminal-status" class="terminal-status">ready</div>
               </div>
-              <div id="terminal-output" class="terminal-body" style="min-height:320px;max-height:460px;">
+              <div id="terminal-output" class="terminal-body">
                 <div class="terminal-line dim">SysCallGuardian v1.0 — System Call Mediation Terminal</div>
                 <div class="terminal-line dim">Authenticated as: <span id="terminal-user" style="color:var(--accent-mid);">—</span></div>
                 <div class="terminal-line dim">Type or select an operation above, then click Execute</div>
@@ -594,6 +594,15 @@
                 <span id="last-result-badge"></span>
               </div>
               <div id="last-result-body"></div>
+            </div>
+
+            <!-- Policy-Based Available Syscalls -->
+            <div class="card" style="padding:16px; margin-top:12px;">
+              <div class="card-title" style="margin-bottom:6px;">Active Policies Available</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Click to load safe sandbox-ready commands for policy testing</div>
+              <div id="policy-syscall-list" style="display:flex;flex-direction:column;gap:6px;">
+                 <div style="font-size:12px;color:var(--text3);font-family:var(--mono);">Syncing active policies...</div>
+              </div>
             </div>
 
           </div>
@@ -634,7 +643,7 @@
           <div><h1>Threat Detection</h1><p>Rule-based detection · risk scoring · live alerts</p></div>
           <div style="display:flex;gap:8px;">
             <button class="btn" onclick="loadThreatsPage();showToast('info','Threat data synchronized.')">↻ Refresh</button>
-            <button class="btn danger" onclick="showToast('danger','Alert broadcast sent to all admins!')">⚠ Broadcast Alert</button>
+            <button class="btn danger" onclick="broadcastThreatAlert()">⚠ Broadcast Alert</button>
           </div>
         </div>
         <div class="threat-grid">
@@ -658,7 +667,7 @@
           <div><h1>Audit Logs</h1><p>Full syscall log · SHA-256 integrity chain · filterable</p></div>
           <div style="display:flex;gap:8px;">
             <button class="btn" onclick="verifyIntegrity()">🔐 Verify Integrity</button>
-            <button class="btn" onclick="showToast('success','Log export initiated!')">↓ Export CSV</button>
+            <button class="btn" onclick="exportLogsCSV()">↓ Export CSV</button>
           </div>
         </div>
 
@@ -829,6 +838,8 @@ function initSyscallPage() {
     terminalLine(`Authenticated as: ${username} (${roleKey})`, 'dim');
     terminalLine('────────────────────────────────────────', 'dim');
   }
+
+  loadDynamicPolicies();
 }
 
 function renderPermissionChips(roleKey) {
@@ -1025,7 +1036,7 @@ async function executeSyscall() {
   if (thinking) thinking.style.display = 'none';
   if (statusEl) statusEl.textContent = 'ready';
 
-  const ts = new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const ts = new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
 
   if (!result || result.status === 0) {
     terminalLine('✗ Network error — backend unreachable', 'blocked');
@@ -1069,6 +1080,9 @@ async function executeSyscall() {
   if (status === 'allowed' && ['file_write', 'file_delete'].includes(currentOp)) {
     renderExplorer();
   }
+  
+  // Refresh global dashboard stats & charts immediately
+  if (typeof refreshDashboard === 'function') refreshDashboard();
 }
 
 
@@ -1138,6 +1152,31 @@ function clearSyscallHistory() {
     terminalLine(`Authenticated as: ${username} (${role})`, 'dim');
     terminalLine('────────────────────────────────────────', 'dim');
   }
+}
+
+async function broadcastThreatAlert() {
+  const btn = event.target;
+  const originalText = btn.textContent;
+  
+  btn.disabled = true;
+  btn.textContent = 'Sending Alert...';
+  
+  try {
+    const res = await apiBroadcastAlert();
+    if (res.ok) {
+      showToast('info', 'Security broadcast sent successfully to Admin and Developer.');
+    } else {
+      showToast('danger', 'Failed to send broadcast alert. Check SMTP settings.');
+    }
+  } catch (err) {
+    showToast('danger', 'Network error during broadcast.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function resetSyscallUI() {
   document.getElementById('last-result-card').style.display = 'none';
   document.getElementById('history-count').textContent = '0 calls';
 }
@@ -1173,6 +1212,59 @@ function loadScenario(name) {
   };
   scenarios[name]?.();
   showToast('success', 'Scenario loaded — click Execute to run');
+}
+
+async function loadDynamicPolicies() {
+  const list = document.getElementById('policy-syscall-list');
+  if (!list) return;
+  const res = await api('GET', '/api/policies');
+  if (!res.ok) {
+    list.innerHTML = `<div style="font-size:12px;color:var(--danger);font-family:var(--mono);padding:10px;">Failed to load policies.</div>`;
+    return;
+  }
+  const policies = Array.isArray(res.data) ? res.data : (res.data?.policies || []);
+  const activePol = policies.filter(p => p.is_active);
+  const role = (localStorage.getItem('sg_role') || 'guest').toLowerCase();
+  
+  const available = activePol.filter(p => {
+    let rule;
+    try { rule = (typeof p.rule_json === 'string') ? JSON.parse(p.rule_json) : (p.rule_json || {}); }
+    catch(e) { return false; }
+    const allow = (rule.allow_roles || []).map(r => r.toLowerCase());
+    const deny = (rule.deny_roles || []).map(r => r.toLowerCase());
+    if (deny.includes(role)) return false;
+    return allow.includes(role);
+  });
+
+  if (available.length === 0) {
+    list.innerHTML = `<div style="padding:10px;text-align:center;font-size:12px;color:var(--text3);font-family:var(--mono);border:1px dashed var(--border);border-radius:4px;">No custom policies active for your role</div>`;
+    return;
+  }
+
+  list.innerHTML = available.map(p => {
+    let rule = (typeof p.rule_json === 'string') ? JSON.parse(p.rule_json) : (p.rule_json || {});
+    const action = rule.action;
+    return `
+      <div class="scenario-btn" onclick="executePolicyAction('${action}')">
+        <span class="tag live" style="font-size:10px;min-width:60px;max-width:120px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;" title="${p.name}">${p.name}</span>
+        <span style="font-size:12px;font-family:var(--mono)">${action}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function executePolicyAction(action) {
+  const btn = document.querySelector(`.op-btn[data-op='${action}']`);
+  if (btn) selectOp(btn);
+  if (['file_read', 'file_write', 'file_delete'].includes(action)) {
+    document.getElementById('input-filepath').value = 'test.txt';
+  } else if (action === 'dir_list') {
+    document.getElementById('input-filepath').value = '.';
+  } else if (action === 'exec_process') {
+    document.getElementById('input-command').value = 'ls';
+  }
+  updatePreview();
+  showToast('info', 'Policy loaded – click Execute to run');
 }
 
 // goPage is already defined in ui.js and already calls initSyscallPage().

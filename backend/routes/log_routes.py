@@ -10,6 +10,7 @@ from auth_rbac.permission_middleware import require_auth, require_role
 from logging_detection.audit_logger  import get_logs
 from logging_detection.log_integrity import verify_all_logs, verify_single_log
 from logging_detection.threat_detection import get_suspicious_users, get_threat_events
+from auth_rbac.notification_service import send_security_broadcast
 
 log_bp = Blueprint("logs", __name__)
 
@@ -315,3 +316,17 @@ def api_dashboard_extended():
         }), 200
     finally:
         conn.close()
+
+@log_bp.route("/api/threats/broadcast", methods=["POST"])
+@require_auth
+@require_role("admin")
+def api_broadcast_alert():
+    """POST /api/threats/broadcast — sense emails to admin & dev"""
+    recipients = ["tejastp193@gmail.com", "cvanshika995@gmail.com"]
+    admin_name = g.user.get("username", "Administrator")
+    
+    success = send_security_broadcast(recipients, admin_name)
+    if success:
+        return jsonify({"message": "Broadcast alert sent successfully to all recipients"}), 200
+    else:
+        return jsonify({"message": "Completed with errors (some emails may have failed)"}), 207

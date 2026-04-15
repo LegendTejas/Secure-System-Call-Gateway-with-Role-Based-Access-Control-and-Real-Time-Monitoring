@@ -55,6 +55,7 @@ function openEditPolicyModal(policyJson) {
   document.getElementById('modal-body').innerHTML    = _buildPolicyForm(policy);
   document.getElementById('modal-footer').innerHTML  = `
     <button class="btn sm" onclick="closeModal()">Cancel</button>
+    <button class="btn sm danger" style="background:transparent;border:1px solid var(--danger);color:var(--danger);" onclick="confirmDeletePolicy(${policy.id}, '${policy.name}')">Delete</button>
     <button class="btn sm danger" onclick="submitDisablePolicy(${policy.id})">
       ${policy.is_active ? 'Disable' : 'Enable'}
     </button>
@@ -359,3 +360,23 @@ async function submitDisablePolicy(id) {
   closeModal();
   await renderPolicies();
 }
+
+// ── Submit: Delete ────────────────────────────────────────────────────────────
+
+async function confirmDeletePolicy(id, name) {
+  if (!confirm(`⚠ WARNING: Are you sure you want to permanently delete the policy '${name}'?\n\nThis action cannot be undone.`)) {
+    return;
+  }
+  
+  const result = await api('DELETE', `/api/policies/${id}`);
+  
+  if (!result.ok) {
+    showToast('danger', result.data?.error || 'Failed to delete policy.');
+    return;
+  }
+  
+  showToast('success', `Policy '${name}' deleted.`);
+  closeModal();
+  await renderPolicies();
+}
+

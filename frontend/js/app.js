@@ -100,7 +100,7 @@ async function refreshDashboard() {
   }
 
   if (statusText) {
-    const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     statusText.textContent = `Last synced: ${now}`;
   }
 }
@@ -361,15 +361,30 @@ function startLiveFeed() {
     liveEventCount++;
     document.getElementById('live-badge').textContent = liveEventCount;
 
-    // Every 10 events, refresh the whole dashboard to sync real stats
-    if (liveEventCount % 10 === 0) refreshDashboard();
+    // Every 3 events, refresh the whole dashboard to sync real stats (formerly 10)
+    if (liveEventCount % 3 === 0) refreshDashboard();
   }, 3000);
 }
 
 function addLiveRow(ev, animate) {
   const feed = document.getElementById('live-feed');
   if (!feed) return;
-  const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  if (ev.status === 'allowed') {
+    liveCount.allowed++;
+    const el = document.getElementById('cnt-allowed');
+    if (el) el.textContent = `Allowed: ${liveCount.allowed}`;
+  } else if (ev.status === 'blocked') {
+    liveCount.blocked++;
+    const el = document.getElementById('cnt-blocked');
+    if (el) el.textContent = `Blocked: ${liveCount.blocked}`;
+  } else if (ev.status === 'flagged' || ev.status === 'suspicious') {
+    liveCount.susp++;
+    const el = document.getElementById('cnt-susp');
+    if (el) el.textContent = `Suspicious: ${liveCount.susp}`;
+  }
+
+  const now = new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const row = document.createElement('div');
   row.className = 'live-entry' + (animate ? ' new-row' : '');
   row.innerHTML = `
@@ -580,7 +595,7 @@ async function drawLogs() {
 
   tbody.innerHTML = filtered.map((l) => {
     const hash = l.hash_preview || '—';
-    const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) : '—';
+    const time = l.timestamp ? new Date(l.timestamp).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
     const safePath = (l.target_path || '—').replace(/'/g, "\\'");
     return `
     <tr class="log-row" onclick="openLogModal('${l.user}','${l.call_type}','${l.status}','${time}','${safePath}','—')">
@@ -643,20 +658,58 @@ function buildPagination(total) {
 }
 
 async function verifyIntegrity() {
-  const integrityText = document.getElementById('integrity-text');
-  if (!integrityText) return;
+  const banner = document.getElementById('integrity-banner');
+  if (!banner) return;
   
-  integrityText.textContent = '⏳ Verifying SHA-256 hash chain…';
+  banner.textContent = '⏳ Verifying SHA-256 process hash chain…';
+  banner.className = 'integrity-banner info';
   
   const res = await apiVerifyLogs();
   if (res.ok) {
     const valid = res.data.status === 'valid';
-    integrityText.textContent = res.data.message;
+    banner.textContent = valid ? '✅ Cryptographic integrity verified: All log hashes are sequentially intact.' : '⚠ TAMPERING DETECTED in the audit trail! Chain broken.';
+    banner.className = 'integrity-banner ' + (valid ? 'success' : 'danger');
     showToast(valid ? 'success' : 'danger', valid ? 'SHA-256 chain verified.' : 'Tampering detected!');
   } else {
-    integrityText.textContent = 'Verification failed.';
+    banner.textContent = 'Verification failed due to connectivity error.';
+    banner.className = 'integrity-banner danger';
     showToast('warn', 'Connection error.');
   }
+}
+
+async function exportLogsCSV() {
+  showToast('info', 'Preparing CSV export…');
+  const res = await apiGetLogs({ per_page: 50000 });
+  if (!res.ok) {
+    showToast('danger', 'Failed to fetch logs for CSV export.');
+    return;
+  }
+  
+  const logs = res.data.logs || [];
+  if (logs.length === 0) {
+    showToast('warn', 'No records to export.');
+    return;
+  }
+
+  const headers = ['Log ID', 'Timestamp (UTC)', 'User', 'Action', 'Target Path', 'Status', 'Risk Delta', 'Reason', 'SHA-256 Hash'];
+  const rows = logs.map(l => {
+    const esc = v => '"' + String(v || '').replace(/"/g, '""') + '"';
+    return [l.id, l.timestamp, l.user, l.call_type, l.target_path, l.status, l.risk_delta, l.reason, l.hash_preview].map(esc).join(',');
+  });
+
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `syscall_audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showToast('success', 'CSV export complete.');
 }
 
 // ── Advanced Policies (Export/Import) ────────────────────────────────────────

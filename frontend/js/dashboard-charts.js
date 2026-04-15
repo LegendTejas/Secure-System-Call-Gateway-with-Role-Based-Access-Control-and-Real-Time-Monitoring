@@ -145,7 +145,13 @@ function renderSyscallBars(data) {
 
   if (syscallBarObj) {
     syscallBarObj.data.labels = syscalls;
-    syscallBarObj.data.datasets = datasets;
+    // Map new data to existing datasets to ensure smooth transition
+    datasets.forEach((newDs, idx) => {
+      if (syscallBarObj.data.datasets[idx]) {
+        syscallBarObj.data.datasets[idx].data = newDs.data;
+        syscallBarObj.data.datasets[idx].label = newDs.label;
+      }
+    });
     syscallBarObj.update();
   } else {
     syscallBarObj = new Chart(ctx, {
@@ -221,7 +227,7 @@ function renderTimelineMarkers(logs) {
           user: l.user,
           path: l.target_path || '—',
           call: l.call_type,
-          timeStr: new Date(l.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          timeStr: new Date(l.timestamp).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
         };
       });
 
@@ -240,8 +246,9 @@ function renderTimelineMarkers(logs) {
   });
 
   if (timelineChartObj) {
+    // For scatter plots, replacing the whole datasets array is cleaner than merging points
     timelineChartObj.data.datasets = datasets;
-    timelineChartObj.update();
+    timelineChartObj.update('none'); // Update without animation for snappier feel
   } else {
     timelineChartObj = new Chart(ctx, {
       type: 'scatter',
@@ -259,7 +266,7 @@ function renderTimelineMarkers(logs) {
               color: COLORS.text3,
               maxRotation: 0,
               callback: function(val) {
-                return new Date(val).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                return new Date(val).toLocaleString('en-IN', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
               }
             }
           },

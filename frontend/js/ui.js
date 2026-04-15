@@ -107,7 +107,7 @@ function applyRBAC(role) {
 
 function startClock() {
   function tick() {
-    const t = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' IST';
+    const t = new Date().toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' IST';
     ['clock', 'clock2'].forEach(id => { 
       const el = document.getElementById(id); 
       if (el) el.textContent = t; 
@@ -200,7 +200,7 @@ function closeModal(e) {
 
 function formatTime(isoString) {
   if (!isoString) return '—';
-  return new Date(isoString).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(isoString).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function getRiskLevel(score) {

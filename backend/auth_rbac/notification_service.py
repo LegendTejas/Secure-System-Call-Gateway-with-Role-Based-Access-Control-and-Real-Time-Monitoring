@@ -84,3 +84,23 @@ def send_admin_alert(to_email: str, admin_username: str):
     </html>
     """
     return send_email(to_email, subject, body)
+
+def send_security_broadcast(to_emails: list, admin_user: str):
+    """Simple broadcast to designated emails"""
+    subject = "[CRITICAL] SysCallGuardian Security Alert"
+    body = f"""
+    <html>
+      <body style="font-family: sans-serif; color: #1A1916;">
+        <h2 style="color: #C0392B;">Critical Broadcast Alert</h2>
+        <p>An administrator (<b>{admin_user}</b>) has issued a system-wide security alert.</p>
+        <p>Please review current system activity and threat logs immediately.</p>
+        <hr style="border:none; border-top:1px solid #eee; margin: 20px 0;">
+        <p style="font-size:12px; color:#666;">This is an automated security notification from SysCallGuardian.</p>
+      </body>
+    </html>
+    """
+    success = True
+    for email in to_emails:
+        if not send_email(email, subject, body):
+            success = False
+    return success
