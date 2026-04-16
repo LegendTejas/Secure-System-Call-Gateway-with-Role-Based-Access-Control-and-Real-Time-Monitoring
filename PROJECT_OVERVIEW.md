@@ -8,28 +8,262 @@ SysCallGuardian is a high-fidelity forensic system call gateway designed to medi
 
 ## 🏛️ 1. Architectural Blueprint
 
-SysCallGuardian operates as an interceptor between the User/Application and the Operating System. Every request follows a strict **Triple-Lock Forensic Lifecycle**:
+SysCallGuardian operates as a mediated interceptor between the User/Application and the Operating System.
+Every request passes through **six sequential security checkpoints** before any OS interaction occurs.
+Every decision — whether allowed or rejected — is permanently recorded in the forensic chain.
 
-```mermaid
-sequenceDiagram
-    participant U as User/Frontend
-    participant A as Auth Middleware
-    participant M as Mediation (Policy Engine)
-    participant F as Forensic Auditor (HMAC)
-    participant OS as Operating System
+```
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                         SYSCALLGUARDIAN — SYSTEM ARCHITECTURE                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
 
-    U->>A: POST /api/syscall/write
-    A->>A: Verify JWT-Equivalent Session
-    A->>M: Forward Request (User + Payload)
-    M->>M: Validate Path (Regex) & Role (Policy)
-    M->>F: Log Decision (Allowed/Blocked)
-    F->>F: Sign Entry + Chain to Prev Hash
-    alt Allowed
-        F->>OS: Execute Native Syscall
-        OS->>U: Success Response (Forensic Hash ID)
-    else Blocked
-        F->>U: 403 Forbidden (Violation Log ID)
-    end
+  ┌──────────────────────────────────────────────────────────┐
+  │                   BROWSER / CLIENT                       │
+  │                                                          │
+  │   index.html + app.js + Chart.js + style.css             │
+  │   ┌─────────────┐  ┌──────────────┐  ┌───────────────┐  │
+  │   │ Login View  │  │  Dashboard   │  │ Policy Editor │  │
+  │   │ Role Select │  │  Overview    │  │ Import/Export │  │
+  │   │ OTP Flow    │  │  Live Feed   │  │ User Manager  │  │
+  │   └─────────────┘  └──────────────┘  └───────────────┘  │
+  │          │                 │                  │          │
+  │          └─────────────────┴──────────────────┘          │
+  │                            │                             │
+  │              HTTP/S  +  Authorization: Bearer <token>    │
+  └────────────────────────────┼─────────────────────────────┘
+                               │
+                               ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 1 — AUTH GATEWAY          (auth_routes.py)         ║
+  ║                                                            ║
+  ║   POST /api/auth/login       → bcrypt password verify      ║
+  ║   POST /api/auth/register    → strength check + role guard ║
+  ║   POST /api/auth/logout      → token invalidation          ║
+  ║   POST /api/auth/forgot-password → OTP generation (SMTP)  ║
+  ║   POST /api/auth/reset-password  → OTP verify + rehash     ║
+  ║                                                            ║
+  ║   • Tokens: SHA-256 UUID stored in `sessions` table        ║
+  ║   • Wrong password → risk_score += RISK_INCREMENT_PER_FAIL ║
+  ║   • N failed logins → is_flagged = 1 (auto-flag)           ║
+  ║   • OTPs stored in `otps` table, expire in 15 minutes      ║
+  ╚══════════════════════════╤═════════════════════════════════╝
+                             │  token verified ✓
+                             │  g.user = { user_id, username, role, risk_score }
+                             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 2 — RBAC MIDDLEWARE       (permission_middleware.py)║
+  ║                                                            ║
+  ║   @require_auth   → validates Bearer token against DB      ║
+  ║   @require_role() → enforces minimum role level            ║
+  ║                                                            ║
+  ║   Role Hierarchy:                                          ║
+  ║   ┌────────────┬────────────────────────────────────────┐  ║
+  ║   │   guest    │ file_read, system_info                 │  ║
+  ║   │ developer  │ + file_write, dir_list                 │  ║
+  ║   │   admin    │ + file_delete, exec_process, all mgmt  │  ║
+  ║   └────────────┴────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║   • No token         → 401 Unauthorized                    ║
+  ║   • Insufficient role → 403 Forbidden                      ║
+  ╚══════════════════════════╤═════════════════════════════════╝
+                             │  role permitted ✓
+                             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 3 — POLICY ENGINE         (policy_evaluator.py)    ║
+  ║                                                            ║
+  ║   Evaluates dynamic JSON rule-sets loaded from DB:         ║
+  ║                                                            ║
+  ║   Rule Example:                                            ║
+  ║     { "call_type": "file_write",                           ║
+  ║       "condition": "risk_score >= 80",                     ║
+  ║       "action": "block" }                                  ║
+  ║                                                            ║
+  ║   • Rules are hot-reloadable without server restart        ║
+  ║   • GET /api/policies/export → backup rule-set to JSON     ║
+  ║   • POST /api/policies/import → restore/deploy rule-set    ║
+  ║   • Inactive policies (is_active=0) are skipped            ║
+  ║   • Policy breach → 403 + reason logged to audit chain     ║
+  ╚══════════════════════════╤═════════════════════════════════╝
+                             │  policy allows ✓
+                             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 4 — SYSCALL WRAPPER       (syscall_controller.py)  ║
+  ║                                 (file_operations.py)      ║
+  ║                                 (process_operations.py)   ║
+  ║                                 (validation.py)           ║
+  ║                                                            ║
+  ║  ┌─── Input Sanitization ──────────────────────────────┐  ║
+  ║  │ Path Blocklist:                                      │  ║
+  ║  │   /etc/passwd  /etc/shadow  /proc  /sys/kernel       │  ║
+  ║  │   /dev  /boot  /root  c:/windows/system32            │  ║
+  ║  │                                                      │  ║
+  ║  │ Path Traversal: rejects ".." after normpath()        │  ║
+  ║  │ Null Byte Guard: rejects "\x00" in any path          │  ║
+  ║  │ Sandbox Lock: resolved path must start with          │  ║
+  ║  │   SANDBOX_ROOT (./sandbox) — no escaping             │  ║
+  ║  └──────────────────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║  ┌─── Command Whitelist (exec_process only) ───────────┐  ║
+  ║  │ ALLOWED: ls, pwd, whoami, echo, cat, head, tail,     │  ║
+  ║  │          grep, find, mkdir, touch, cp, mv, wc, sort, │  ║
+  ║  │          python3, node, java, hostname, ipconfig,    │  ║
+  ║  │          netstat, dir, type, ver, attrib             │  ║
+  ║  │                                                      │  ║
+  ║  │ BLOCKED (denylist): rm, rmdir, dd, sudo, chmod,      │  ║
+  ║  │   chown, kill, wget, curl, bash, sh, passwd          │  ║
+  ║  │                                                      │  ║
+  ║  │ Injection Patterns (regex):                          │  ║
+  ║  │   ;\s*rm\s   |  \|\s*sh  |  &&\s*curl               │  ║
+  ║  │   >\s*/etc   |  `.*`     |  \$\(  |  \.\.\/         │  ║
+  ║  └──────────────────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║  ┌─── Write Mode Control (file_write) ─────────────────┐  ║
+  ║  │  truncate  → open(f, 'w')          full overwrite    │  ║
+  ║  │  append    → open(f, 'a')          add to end        │  ║
+  ║  │  overwrite → open(f, 'r+'), seek(0) from position 0  │  ║
+  ║  │  offset    → open(f, 'r+'), seek(n) at byte n        │  ║
+  ║  │  max payload: 10 MB                                  │  ║
+  ║  └──────────────────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║  ┌─── Timeout Guard (exec_process) ────────────────────┐  ║
+  ║  │  subprocess.run(..., timeout=5, cwd=SAFE_BASE_DIR)   │  ║
+  ║  │  Hangs → killed + "Command timed out" in log         │  ║
+  ║  └──────────────────────────────────────────────────────┘  ║
+  ╚═══════════════╤══════════════════════╤══════════════════════╝
+                  │                      │
+        validation passes ✓        validation fails ✗
+                  │                      │
+                  ▼                      ▼
+  ┌───────────────────────┐   ┌──────────────────────────────┐
+  │    OS / KERNEL        │   │     BLOCKED — NO OS ACCESS   │
+  │                       │   │                              │
+  │  file_read  → read()  │   │  reason written to audit     │
+  │  file_write → write() │   │  log with risk_delta         │
+  │  file_delete→ remove()│   │  user.risk_score updated     │
+  │  dir_list  → listdir()│   │  403 returned to client      │
+  │  exec_process→        │   └──────────────────────────────┘
+  │    subprocess.run()   │
+  │  system_info → static │
+  └──────────┬────────────┘
+             │  OS result (content / output / entries)
+             │
+             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 5 — AUDIT LOGGER          (audit_logger.py)        ║
+  ║                                                            ║
+  ║  Every syscall decision (allowed OR blocked) is logged:   ║
+  ║                                                            ║
+  ║  Log Entry Fields:                                         ║
+  ║  ┌──────────────┬────────────────────────────────────┐    ║
+  ║  │ user_id      │ FK → users.id                      │    ║
+  ║  │ call_type    │ file_read / exec_process / etc.     │    ║
+  ║  │ target_path  │ sanitized path or command string    │    ║
+  ║  │ status       │ "allowed" | "blocked" | "flagged"   │    ║
+  ║  │ reason       │ NULL if allowed; block reason text  │    ║
+  ║  │ risk_delta   │ risk score increment for this event │    ║
+  ║  │ timestamp    │ UTC ISO-8601                        │    ║
+  ║  │ log_hash     │ SHA-256 of entry fields             │    ║
+  ║  │ prev_hash    │ log_hash of previous entry (chain)  │    ║
+  ║  └──────────────┴────────────────────────────────────┘    ║
+  ║                                                            ║
+  ║  SHA-256 Chain Formula:                                    ║
+  ║  ┌─────────────────────────────────────────────────────┐  ║
+  ║  │  hash_n = SHA256(JSON({                             │  ║
+  ║  │    user_id, call_type, target_path,                 │  ║
+  ║  │    status, reason, risk_delta,                      │  ║
+  ║  │    timestamp, prev_hash=hash_(n-1)                  │  ║
+  ║  │  }, sort_keys=True))                                │  ║
+  ║  │                                                     │  ║
+  ║  │  First entry: prev_hash = "GENESIS"                 │  ║
+  ║  └─────────────────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║  Any post-write modification to a log row                  ║
+  ║  breaks the chain — detectable via:                        ║
+  ║    GET /api/logs/verify      (full chain scan)             ║
+  ║    GET /api/logs/verify/:id  (single entry check)          ║
+  ╚══════════════════════════╤═════════════════════════════════╝
+                             │  log committed
+                             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  LAYER 6 — THREAT ENGINE         (threat_detection.py)    ║
+  ║                                  (risk_scoring.py)        ║
+  ║                                                            ║
+  ║  Runs analyze_event() after EVERY syscall (allowed+blocked)║
+  ║                                                            ║
+  ║  In-Memory Sliding Window (5 min, resets on restart):      ║
+  ║  ┌──────┬────────────────────┬───────────┬─────────────┐  ║
+  ║  │ Rule │ Name               │ Threshold │ Severity    │  ║
+  ║  ├──────┼────────────────────┼───────────┼─────────────┤  ║
+  ║  │  R2  │ Syscall Flood      │ ≥5 same   │ High        │  ║
+  ║  │      │                    │ type/60s  │             │  ║
+  ║  │  R3  │ Exec Violation     │ ≥1 blocked│ Critical    │  ║
+  ║  │      │                    │ exec/5min │             │  ║
+  ║  │  R4  │ System Path Probe  │ any access│ High        │  ║
+  ║  │      │                    │ to /sys   │             │  ║
+  ║  │      │                    │ /proc etc.│             │  ║
+  ║  │  R5  │ Risk Threshold     │ score ≥70 │ Critical    │  ║
+  ║  └──────┴────────────────────┴───────────┴─────────────┘  ║
+  ║                                                            ║
+  ║  Risk Score Accumulation:                                  ║
+  ║    risk_score += risk_delta per blocked call               ║
+  ║    risk_score capped at 100.0 (MAX_RISK_SCORE)             ║
+  ║                                                            ║
+  ║  Risk Levels:                                              ║
+  ║    0–19   → low       (normal usage)                       ║
+  ║    20–39  → medium    (watch list)                         ║
+  ║    40–69  → high      (dashboard flagged)                  ║
+  ║    70–100 → critical  (forensic isolation recommended)     ║
+  ║                                                            ║
+  ║  On rule fire:                                             ║
+  ║    UPDATE users SET is_flagged = 1 WHERE id = ?            ║
+  ║    event appended to _threat_log (in-memory)               ║
+  ╚══════════════════════════╤═════════════════════════════════╝
+                             │  threat state updated
+                             ▼
+  ╔════════════════════════════════════════════════════════════╗
+  ║  DASHBOARD UI                    (app.js + Chart.js)      ║
+  ║                                                            ║
+  ║  Reads from these API endpoints:                           ║
+  ║                                                            ║
+  ║  ┌─────────────────────────────────────────────────────┐  ║
+  ║  │  /api/dashboard/stats     → KPI cards (total,        │  ║
+  ║  │                             allowed, blocked)        │  ║
+  ║  │  /api/dashboard/activity  → 24h hourly timeline      │  ║
+  ║  │  /api/dashboard/extended  → heatmap, role dist,      │  ║
+  ║  │                             risk scores, scatter     │  ║
+  ║  │  /api/logs                → forensic audit table     │  ║
+  ║  │  /api/threats             → flagged users + scores   │  ║
+  ║  │  /api/threats/events      → live threat event feed   │  ║
+  ║  │  /api/policies            → policy rule-set editor   │  ║
+  ║  │  /api/users               → user cards + mgmt        │  ║
+  ║  └─────────────────────────────────────────────────────┘  ║
+  ║                                                            ║
+  ║  Visualizations:                                           ║
+  ║    • Forensic Scatter Stream   (chronological events)      ║
+  ║    • User × Syscall Heatmap    (call volume matrix)        ║
+  ║    • 24h Activity Timeline     (allowed vs blocked)        ║
+  ║    • Risk Score Leaderboard    (user risk ranking)         ║
+  ║    • Role Distribution Chart   (call share by role)        ║
+  ║    • Security Intel Snapshot   (live threat counters)      ║
+  ╚════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                  DATA FLOW SUMMARY                          │
+  │                                                             │
+  │  REQUEST PATH (happy path):                                 │
+  │  Client → Auth → RBAC → Policy → Wrapper → OS              │
+  │                                         ↓                  │
+  │                                    Audit Logger             │
+  │                                         ↓                  │
+  │                                    Threat Engine            │
+  │                                         ↓                  │
+  │                                    Dashboard APIs           │
+  │                                                             │
+  │  BLOCK PATH (any layer can reject):                         │
+  │  Client → [Layer N rejects] → Audit Logger → Threat Engine  │
+  │                            ↓                               │
+  │                       403 + reason returned to client       │
+  └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
