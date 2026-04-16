@@ -23,11 +23,22 @@ const PE_VALID_ACTIONS = [
 ];
 
 const PE_ALL_ROLES = ['admin', 'developer', 'guest'];
+let PE_ALL_USERS     = []; // Populated via /api/users
+let PE_SANDBOX_FILES = []; // Populated via /api/syscall/explorer
 
 
 // ── Open: Create New Policy ───────────────────────────────────────────────────
 
-function openCreatePolicyModal() {
+async function openCreatePolicyModal() {
+  // Fetch latest users and files for selectors
+  const [usersRes, filesRes] = await Promise.all([
+    api('GET', '/api/users'),
+    api('GET', '/api/syscall/explorer')
+  ]);
+  
+  PE_ALL_USERS     = usersRes.ok ? usersRes.data : [];
+  PE_SANDBOX_FILES = filesRes.ok ? (filesRes.data?.entries || []) : [];
+
   document.getElementById('modal-title').textContent = '+ New Policy';
   document.getElementById('modal').classList.add('wide');
   document.getElementById('modal-body').innerHTML    = _buildPolicyForm(null);
@@ -40,7 +51,7 @@ function openCreatePolicyModal() {
 
 // ── Open: Edit Existing Policy ────────────────────────────────────────────────
 
-function openEditPolicyModal(policyJson) {
+async function openEditPolicyModal(policyJson) {
   // If we get an escaped JSON string, parse it. If it's already an object, use it.
   let policy;
   try {
@@ -50,6 +61,14 @@ function openEditPolicyModal(policyJson) {
     return;
   }
   
+  // Fetch latest users and files
+  const [usersRes, filesRes] = await Promise.all([
+    api('GET', '/api/users'),
+    api('GET', '/api/syscall/explorer')
+  ]);
+  PE_ALL_USERS     = usersRes.ok ? usersRes.data : [];
+  PE_SANDBOX_FILES = filesRes.ok ? (filesRes.data?.entries || []) : [];
+
   document.getElementById('modal-title').textContent = `Edit — ${policy.name}`;
   document.getElementById('modal').classList.add('wide');
   document.getElementById('modal-body').innerHTML    = _buildPolicyForm(policy);
@@ -67,13 +86,15 @@ function openEditPolicyModal(policyJson) {
 // ── Form Builder ──────────────────────────────────────────────────────────────
 
 function _buildPolicyForm(existing) {
-  const rule     = existing?.rule_json || {};
-  const selAct   = rule.action        || '';
-  const selAllow = rule.allow_roles   || [];
-  const selDeny  = rule.deny_roles    || [];
-  const maxRisk  = rule.conditions?.max_risk_score ?? '';
-  const timeFrom = rule.conditions?.time_range?.[0] ?? '';
-  const timeTo   = rule.conditions?.time_range?.[1] ?? '';
+  const rule        = existing?.rule_json || {};
+  const selAct      = rule.action           || '';
+  const selAllow    = rule.allow_roles      || [];
+  const selDeny     = rule.deny_roles       || [];
+  const selFile     = rule.target_file      || '';
+  const selUsers    = rule.specific_users   || [];
+  const maxRisk     = rule.conditions?.max_risk_score ?? '';
+  const timeFrom    = rule.conditions?.time_range?.[0] ?? '';
+  const timeTo      = rule.conditions?.time_range?.[1] ?? '';
 
   const inputStyle = `
     width:100%;padding:9px 12px;
@@ -141,6 +162,19 @@ function _buildPolicyForm(existing) {
           </div>
         </div>
 
+        <!-- Target File Select -->
+        <div class="modal-field" style="margin-bottom:0;">
+          <div class="modal-field-label">Target File <span style="font-weight:400;color:var(--text3)">(optional)</span></div>
+          <select id="pe-file" style="${inputStyle}cursor:pointer;"
+            onfocus="this.style.borderColor='var(--accent)'"
+            onblur="this.style.borderColor='var(--border)'">
+            <option value="">— apply to all —</option>
+            ${PE_SANDBOX_FILES.map(f =>
+              `<option value="${f.name}" ${selFile === f.name ? 'selected' : ''}>${f.name}</option>`
+            ).join('')}
+          </select>
+        </div>
+
         <!-- Deny Roles -->
         <div class="modal-field" style="margin-bottom:0;">
           <div class="modal-field-label">Deny Roles</div>
@@ -157,6 +191,23 @@ function _buildPolicyForm(existing) {
                   onchange="validatePolicyForm()"/>
                 ${r}
               </label>`).join('')}
+          </div>
+        </div>
+
+        <!-- Target Users Multi -->
+        <div class="modal-field" style="margin-bottom:0;">
+          <div class="modal-field-label">Specific Users <span style="font-weight:400;color:var(--text3)">(optional)</span></div>
+          <div id="pe-user-list" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius);max-height:80px;overflow-y:auto;background:var(--surface);">
+            ${PE_ALL_USERS.length === 0 ? '<div style="font-size:11px;color:var(--text3);">No users found</div>' : 
+              PE_ALL_USERS.map(u => `
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;font-family:var(--mono);">
+                  <input type="checkbox" class="pe-specific-user" value="${u.username}"
+                    style="accent-color:var(--accent);width:13px;height:13px;"
+                    ${selUsers.includes(u.username) ? 'checked' : ''}
+                    onchange="validatePolicyForm()"/>
+                  ${u.username}
+                </label>`).join('')
+            }
           </div>
         </div>
       </div>
@@ -262,16 +313,20 @@ document.addEventListener('input', e => {
 // ── Collect rule_json from form ───────────────────────────────────────────────
 
 function _collectRule() {
-  const action     = document.getElementById('pe-action')?.value || '';
-  const allowRoles = PE_ALL_ROLES.filter(r => document.getElementById(`pe-allow-${r}`)?.checked);
-  const denyRoles  = PE_ALL_ROLES.filter(r => document.getElementById(`pe-deny-${r}`)?.checked);
-  const maxRisk    = document.getElementById('pe-maxrisk')?.value;
-  const timeFrom   = document.getElementById('pe-timefrom')?.value;
-  const timeTo     = document.getElementById('pe-timeto')?.value;
+  const action       = document.getElementById('pe-action')?.value || '';
+  const allowRoles   = PE_ALL_ROLES.filter(r => document.getElementById(`pe-allow-${r}`)?.checked);
+  const denyRoles    = PE_ALL_ROLES.filter(r => document.getElementById(`pe-deny-${r}`)?.checked);
+  const targetFile   = document.getElementById('pe-file')?.value || '';
+  const specUsers    = Array.from(document.querySelectorAll('.pe-specific-user:checked')).map(el => el.value);
+  const maxRisk      = document.getElementById('pe-maxrisk')?.value;
+  const timeFrom     = document.getElementById('pe-timefrom')?.value;
+  const timeTo       = document.getElementById('pe-timeto')?.value;
 
   const rule = { action };
   if (allowRoles.length) rule.allow_roles = allowRoles;
   if (denyRoles.length)  rule.deny_roles  = denyRoles;
+  if (targetFile)        rule.target_file = targetFile;
+  if (specUsers.length)  rule.specific_users = specUsers;
 
   const conditions = {};
   if (maxRisk)            conditions.max_risk_score = parseFloat(maxRisk);

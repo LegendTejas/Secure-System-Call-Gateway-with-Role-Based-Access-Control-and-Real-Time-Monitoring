@@ -57,7 +57,12 @@ def handle_syscall(call_type: str, user: dict, payload: dict) -> dict:
         }
 
     # ── Step 2: Policy check ──────────────────────────────
-    policy_result = evaluate(call_type, user["role"], {"risk_score": user.get("risk_score", 0.0)})
+    target = payload.get("file_path") or payload.get("command") or ""
+    policy_result = evaluate(call_type, user["role"], {
+        "risk_score":  user.get("risk_score", 0.0),
+        "username":    user.get("username"),
+        "target_path": target
+    })
     if not policy_result["allowed"]:
         _log_and_score(call_type, user, payload, "blocked", policy_result["reason"])
         return {"status": "blocked", "reason": policy_result["reason"]}

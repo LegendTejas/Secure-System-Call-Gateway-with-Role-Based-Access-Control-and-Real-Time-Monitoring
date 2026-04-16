@@ -152,6 +152,15 @@ def api_dashboard_stats():
         blocked = get_count('blocked')
         flagged = get_count('flagged')
         
+        # Count specifically policy-blocked syscalls for today
+        def get_policy_today_count():
+            c = list(conditions) + ["l.status = ?", "l.reason LIKE '%policy%'", "l.timestamp >= date('now')"]
+            p = list(params) + ['blocked']
+            w = "WHERE " + " AND ".join(c)
+            return conn.execute(f"SELECT COUNT(*) FROM syscall_logs l JOIN users u ON l.user_id=u.id {w}", p).fetchone()[0]
+
+        policy_blocked_today = get_policy_today_count()
+
         if is_admin:
             sus_users = conn.execute("SELECT COUNT(*) FROM users WHERE is_flagged=1").fetchone()[0]
         else:
@@ -164,12 +173,13 @@ def api_dashboard_stats():
         top_users = conn.execute(top_query, params).fetchall()
 
         return jsonify({
-            "total_calls":     total,
-            "allowed":         allowed,
-            "blocked":         blocked,
-            "flagged":         flagged,
-            "suspicious_users": sus_users,
-            "top_users":       [{"username": r["username"], "call_count": r["call_count"]} for r in top_users],
+            "total_calls":         total,
+            "allowed":             allowed,
+            "blocked":             blocked,
+            "flagged":             flagged,
+            "blocked_policy_today": policy_blocked_today,
+            "suspicious_users":    sus_users,
+            "top_users":           [{"username": r["username"], "call_count": r["call_count"]} for r in top_users],
         }), 200
     finally:
         conn.close()

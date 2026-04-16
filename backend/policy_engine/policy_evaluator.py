@@ -57,6 +57,17 @@ def evaluate(action: str, role: str, context: dict = None) -> dict:
         rule   = policy["rule"]
         name   = policy["name"]
 
+        # 0. Granular Filters (Target File & Specific User)
+        # If policy specifies a file but context doesn't match -> skip this policy
+        target_file = rule.get("target_file")
+        if target_file and target_file != context.get("target_path"):
+            continue
+
+        # If policy specifies users but current user is not listed -> skip this policy
+        spec_users = rule.get("specific_users")
+        if spec_users and context.get("username") not in spec_users:
+            continue
+
         # 1. Explicit deny
         if role in rule.get("deny_roles", []):
             return {

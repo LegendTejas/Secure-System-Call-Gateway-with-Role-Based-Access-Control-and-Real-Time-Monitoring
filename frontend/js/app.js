@@ -436,8 +436,16 @@ window.renderPolicies = async function() {
   // Update header and stat cards
   const tag = document.querySelector('#page-policies .tag.live');
   if (tag) tag.textContent = `${active} enabled`;
-  const countEl = document.querySelector('#page-policies .stat-value');
+  
+  const countEl = document.getElementById('active-policy-count');
   if (countEl) countEl.textContent = active;
+
+  // Fetch and update blocked policy counts for today
+  const statsRes = await apiGetStats();
+  const blockedEl = document.getElementById('policy-blocked-today');
+  if (blockedEl) {
+    blockedEl.textContent = statsRes.ok ? (statsRes.data?.blocked_policy_today ?? 0) : '—';
+  }
 
   // READ-ONLY Banner for Developers
   const pageHeader = document.querySelector('#page-policies .page-header p');
