@@ -359,27 +359,65 @@ The Threat Intel Engine monitors real-time forensic streams to assign dynamic **
 
 ## 💾 5. Data Infrastructure (SQL Schema)
 
-### Table: `users`
+SysCallGuardian utilizes **SQLite3** for low-latency, file-based persistence. The schema is optimized for RBAC enforcement and forensic integrity.
 
-| Column       | Type          | Description                         |
-| :----------- | :------------ | :---------------------------------- |
-| `id`         | INTEGER (PK)  | Unique User Identifier              |
-| `username`   | TEXT (Unique) | Identity Handle                     |
-| `role`       | TEXT          | RBAC Role (guest, developer, admin) |
-| `risk_score` | REAL          | Heuristic risk (0-100)              |
-| `is_flagged` | INTEGER (0/1) | Alert status for SOC                |
+### Table: `users`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Unique User Identifier |
+| `username` | TEXT (Unique) | Identity Handle |
+| `email` | TEXT | Contact email (for OTPs/alerts) |
+| `password_hash` | TEXT | Bcrypt hashed credential |
+| `role` | TEXT | `admin`, `developer`, or `guest` |
+| `is_flagged` | INTEGER (0/1) | Heuristic alert status |
+| `risk_score` | REAL | Cumulative threat score (0-100) |
+| `created_at` | TIMESTAMP | Account creation date |
+
+### Table: `roles`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `role` | TEXT (PK) | Role name (`admin`, etc.) |
+| `permissions` | TEXT (JSON) | List of allowed syscall actions |
+
+### Table: `policies`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Policy ID |
+| `name` | TEXT (Unique) | Human-readable policy name |
+| `rule_json` | TEXT (JSON) | Logic governing the policy action |
+| `is_active` | INTEGER (0/1) | Whether the policy is enforced |
+| `updated_at` | TIMESTAMP | Last modification date |
 
 ### Table: `syscall_logs`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Log Sequence ID |
+| `user_id` | INTEGER (FK) | Reference to `users.id` |
+| `call_type` | TEXT | `file_read`, `exec_process`, etc. |
+| `target_path` | TEXT | Sanitized path or command string |
+| `status` | TEXT | `allowed`, `blocked`, or `flagged` |
+| `reason` | TEXT | Block reason or policy name |
+| `risk_delta` | REAL | Risk score impact of this event |
+| `log_hash` | TEXT | SHA-256 HMAC entry signature |
+| `prev_hash` | TEXT | Link to the previous entry (chain) |
+| `timestamp` | TIMESTAMP | UTC event time |
 
-| Column        | Type         | Description                      |
-| :------------ | :----------- | :------------------------------- |
-| `id`          | INTEGER (PK) | Log Sequence ID                  |
-| `user_id`     | INTEGER (FK) | Reference to `users.id`          |
-| `call_type`   | TEXT         | e.g. `file_read`, `exec_process` |
-| `target_path` | TEXT         | Sanitized path or command        |
-| `status`      | TEXT         | `allowed`, `blocked`, `flagged`  |
-| `log_hash`    | TEXT         | Cryptographic entry signature    |
-| `prev_hash`   | TEXT         | Chain link to previous entry     |
+### Table: `sessions`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `token` | TEXT (PK) | SHA-256 Session UUID |
+| `user_id` | INTEGER (FK) | Reference to `users.id` |
+| `expires_at` | TIMESTAMP | Token expiration datetime |
+| `created_at` | TIMESTAMP | Session initiation date |
+
+### Table: `otps`
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER (PK) | Verification ID |
+| `email` | TEXT | Target for security code |
+| `otp_code` | TEXT | 6-digit verification numeric |
+| `expires_at` | TIMESTAMP | 15-minute expiration window |
+| `created_at` | TIMESTAMP | Issuance timestamp |
 
 ---
 
