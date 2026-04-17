@@ -37,8 +37,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/secure-syscall-gateway.git
-cd secure-syscall-gateway
+git clone https://github.com/LegendTejas/SysCallGuardian.git
+cd SysCallGuardian
 
 # Initialize and activate the virtual environment
 python -m venv venv
